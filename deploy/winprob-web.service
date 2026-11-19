@@ -1,0 +1,26 @@
+[Unit]
+Description=Sleeper win probability website
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=winprob
+WorkingDirectory=/opt/sleeper-winprob
+# Public site (no settings) for nginx to proxy; admin site with settings on
+# 127.0.0.1:3117, reachable only through an SSH tunnel.
+Environment=HOST=127.0.0.1
+Environment=PORT=3017
+Environment=ADMIN_PORT=3117
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# Settings are saved in the database, so the site writes there too.
+ReadWritePaths=/opt/sleeper-winprob/data
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,21 @@
+[Unit]
+Description=Sleeper win probability collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=winprob
+WorkingDirectory=/opt/sleeper-winprob
+ExecStart=/usr/bin/node collector.js
+Restart=always
+RestartSec=5
+# The collector only needs to write its database.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/opt/sleeper-winprob/data
+
+[Install]
+WantedBy=multi-user.target

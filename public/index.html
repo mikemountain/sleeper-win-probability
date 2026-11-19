@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>League Win Probability</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <div>
+      <h1 id="league-title">Win probability</h1>
+      <p id="status" class="muted">Loading…</p>
+    </div>
+    <div class="controls">
+      <label>Week <select id="week"></select></label>
+      <div id="segments" class="segments" role="group" aria-label="Game window"></div>
+      <a id="settings-link" class="button" href="settings.html" hidden>Settings</a>
+    </div>
+  </header>
+  <main id="grid" class="grid"></main>
+  <p id="empty" class="muted empty" hidden>No data yet. Start the collector with <code>node collector.js</code>.</p>
+  <div id="hover-panel" class="hover-panel" hidden></div>
+  <script src="colors.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

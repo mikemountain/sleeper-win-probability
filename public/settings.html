@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Tracker Settings</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Settings</h1>
+      <p class="muted">Saved on this computer for everyone who opens the site.</p>
+    </div>
+    <div class="controls"><a class="button" href="./">← Back to charts</a></div>
+  </header>
+  <main class="settings">
+    <section>
+      <h2>Team colors</h2>
+      <p class="muted">Each team's color is used for its half of the line, its shading and its swing markers. Teams on "default" are blue or orange depending on matchup.</p>
+      <div id="teams"></div>
+      <div id="clashes"></div>
+    </section>
+    <section>
+      <h2>Swing markers</h2>
+      <p class="muted">Mark a swing when one team's win chance moves by at least this much within a minute. This also applies to games already recorded.</p>
+      <div class="threshold">
+        <input id="threshold" type="range" min="2" max="30" step="1" aria-label="Swing threshold">
+        <b id="threshold-val"></b>
+      </div>
+    </section>
+    <div class="save-bar">
+      <span id="saved" class="muted"></span>
+      <button id="save" class="btn primary">Save</button>
+    </div>
+  </main>
+  <script src="colors.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+:root {
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --team-a: #2a78d6;
+  --team-b: #eb6834;
+  --border: #e1e0d9;
+  --live: #0ca30c;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --team-a: #3987e5;
+    --team-b: #d95926;
+    --border: #2c2c2a;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 24px 16px 48px;
+  background: var(--page);
+  color: var(--ink);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+header {
+  max-width: 1280px;
+  margin: 0 auto 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  align-items: flex-end;
+  justify-content: space-between;
+}
+h1 { margin: 0; font-size: 22px; font-weight: 650; }
+.muted { color: var(--muted); margin: 4px 0 0; }
+.live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--live); margin-right: 6px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+select, .segments button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+}
+.segments { display: flex; gap: 4px; flex-wrap: wrap; }
+.segments button { cursor: pointer; color: var(--ink-2); }
+.segments button[aria-pressed="true"] { color: var(--ink); border-color: var(--ink-2); font-weight: 600; }
+
+.grid {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 16px;
+}
+@media (max-width: 440px) { .grid { grid-template-columns: 1fr; } }
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 14px 8px;
+  min-width: 0;
+}
+.teams { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; margin-bottom: 8px; }
+.team { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nums { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pct { font-weight: 700; display: inline-block; min-width: 3.2em; }
+.pts { color: var(--ink-2); }
+.proj { color: var(--muted); font-size: 12px; }
+.chart-wrap { position: relative; height: 200px; }
+.empty { text-align: center; margin-top: 40px; }
+code { background: var(--surface); border: 1px solid var(--border); padding: 1px 5px; border-radius: 4px; }
+
+/* Header link styled like the other controls */
+a.button {
+  font: inherit;
+  color: var(--ink-2);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  text-decoration: none;
+}
+a.button:hover { color: var(--ink); }
+
+/* Hover readout beside the card */
+.hover-panel {
+  position: fixed;
+  z-index: 10;
+  width: 260px;
+  background: var(--surface);
+  border: 1px solid var(--axis);
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+.hp-time { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.hp-row { display: flex; align-items: center; gap: 8px; }
+.hp-name { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hp-sub { color: var(--muted); font-size: 12px; margin: 0 0 6px 18px; }
+.hp-event { display: flex; gap: 8px; border-top: 1px solid var(--border); padding-top: 8px; margin-top: 4px; }
+.hp-event .bubble { flex: none; }
+.hp-event .hp-sub { margin: 2px 0 0; }
+
+/* Big swings list under each chart */
+.swings { margin-top: 6px; border-top: 1px solid var(--border); padding-top: 6px; }
+.swings summary { cursor: pointer; color: var(--ink-2); font-size: 12px; font-weight: 600; }
+.swings ul { list-style: none; margin: 6px 0 4px; padding: 0; max-height: 116px; overflow-y: auto; }
+.swings li {
+  display: grid;
+  grid-template-columns: 26px auto 1fr;
+  gap: 2px 8px;
+  align-items: baseline;
+  padding: 4px 4px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+.swings li:hover { background: var(--page); }
+.swings li .bubble { grid-row: span 2; align-self: center; }
+.sw-time { color: var(--muted); white-space: nowrap; }
+.sw-text { color: var(--ink); min-width: 0; }
+.sw-delta { grid-column: 3; color: var(--ink-2); font-weight: 600; }
+
+/* Settings page */
+.settings { max-width: 640px; margin: 0 auto; }
+.settings section { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.settings h2 { font-size: 15px; margin: 0 0 4px; }
+.team-row { display: grid; grid-template-columns: 36px 1fr auto; gap: 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--border); }
+.team-row:first-of-type { border-top: 0; }
+.team-row input[type="color"] { width: 36px; height: 28px; padding: 0; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; }
+.team-row .owner { color: var(--muted); font-size: 12px; }
+.team-row .default-tag { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.btn {
+  font: inherit; color: var(--ink); background: var(--surface);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; cursor: pointer;
+}
+.btn.primary { background: var(--ink); color: var(--surface); border-color: var(--ink); font-weight: 600; }
+.threshold { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+.threshold input { flex: 1; }
+.warn { color: var(--ink); background: var(--page); border: 1px solid var(--axis); border-radius: 6px; padding: 8px 10px; margin-top: 10px; font-size: 13px; }
+.save-bar { display: flex; gap: 10px; align-items: center; justify-content: flex-end; }
+
+/* Avatar bubble: photo in a ring of the team's color; plain dot if no photo */
+.bubble {
+  display: inline-block;
+  flex: none;
+  border-radius: 50%;
+  box-sizing: border-box;
+  border: 2px solid var(--ring);
+  background: var(--surface);
+  overflow: hidden;
+}
+.bubble img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top; }
+.bubble.empty { background: var(--ring); }
+.bubble.headshot img { transform: scale(1.55); transform-origin: 50% 28%; }

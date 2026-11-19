@@ -1,0 +1,15 @@
+# Recorded win-probability history (SQLite) stays local / on the server
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Deploy package built by deploy/pack.js
+dist/
+
+node_modules/
+.DS_Store
+Thumbs.db
+
+# Your league ID (see config.local.example.json)
+config.local.json
