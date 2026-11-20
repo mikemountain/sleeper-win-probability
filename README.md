@@ -14,6 +14,7 @@ Copy `config.local.example.json` to `config.local.json` and put your Sleeper lea
 - **Website:** double-click `start-site.cmd` (or run `node server.js`), then open http://localhost:3000. While the collector is running, the page refreshes itself every 5 seconds.
 
 - **Swing markers:** dots on each chart, plus a "Big swings" list underneath, show when a team's win chance jumped and which player caused it. A play type such as "rec TD" or "FG" is added within a few minutes, once Sleeper's stats feed catches up. Until then a big jump says "(likely TD)".
+- **Looks:** pick one of six at the top of the page: Broadcast (TV graphics), Paper (newspaper sports page), Scoreboard (stadium board), Blueprint (engineering drawing), Riso (two-ink zine print) or Teletext (1980s TV text page). Each viewer's choice is remembered in their browser.
 - **Settings** (link at the top right of the page): team colors and how big a swing needs to be before it gets a marker.
 - **Weeks recorded before swing tracking:** run `node backfill-events.js` once to give them team-level markers.
 

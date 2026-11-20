@@ -15,6 +15,65 @@ const fmtTime = (ts) => new Date(ts * 1000).toLocaleTimeString([], { hour: 'nume
 const fmtDay = (ts) => new Date(ts * 1000).toLocaleDateString([], { weekday: 'short', month: 'numeric', day: 'numeric' });
 const fmtFull = (ts) => `${fmtDay(ts)} ${new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`;
 const pct = (p) => `${Math.round(p * 100)}%`;
+const L = () => window.Looks.chart();
+let lastData = null;
+
+/** Pull a team color part of the way toward the look's ink (Paper's "printed" lines). */
+function inked(hex, t) {
+  if (!t) return hex;
+  const ink = css('--ink');
+  const n1 = parseInt(hex.slice(1), 16);
+  const n2 = parseInt(ink.slice(1), 16);
+  const ch = (n, sh) => (n >> sh) & 255;
+  const mixc = (sh) => Math.round(ch(n1, sh) * (1 - t) + ch(n2, sh) * t);
+  return '#' + [16, 8, 0].map((sh) => mixc(sh).toString(16).padStart(2, '0')).join('');
+}
+
+/** Apply the active look to a chart's static options (fonts, grid, line). */
+function styleChart(chart) {
+  const look = L();
+  Chart.defaults.font.family = look.font;
+  const font = { family: look.font, size: look.fontSize, weight: look.fontWeight };
+  const sx = chart.options.scales.x;
+  const sy = chart.options.scales.y;
+  sx.border.color = css('--axis');
+  sx.ticks.color = css('--muted');
+  sx.ticks.font = font;
+  sx.ticks.autoSkipPadding = 18; // wide fonts (Doto) need room between time labels
+  sx.ticks.includeBounds = false; // no extra label jammed against the last one at the edge
+  sy.ticks.color = css('--muted');
+  sy.ticks.font = font;
+  sy.grid.display = look.gridLines;
+  sy.grid.color = css('--grid');
+  const line = chart.data.datasets[2];
+  line.borderWidth = look.lineWidth;
+  line.borderDash = look.dash;
+  // Teletext draws chunky square steps; everything else a smooth curve.
+  line.stepped = look.stepped ? 'middle' : false;
+  line.cubicInterpolationMode = look.stepped ? 'default' : 'monotone';
+  line.borderJoinStyle = look.join || 'round';
+  line.borderCapStyle = look.cap || 'round';
+  const dots = chart.data.datasets[1];
+  dots.pointBorderWidth = 2;
+  dots.pointStyle = look.pointStyle || 'circle';
+}
+
+// Riso: shade with a halftone dot screen in the team's ink instead of a flat tint.
+const halftones = new Map();
+function halftone(hex) {
+  if (!halftones.has(hex)) {
+    const c = document.createElement('canvas');
+    c.width = c.height = 6;
+    const g = c.getContext('2d');
+    g.fillStyle = alpha(hex, 0.55);
+    g.beginPath();
+    g.arc(3, 3, 1.25, 0, Math.PI * 2);
+    g.fill();
+    halftones.set(hex, g.createPattern(c, 'repeat'));
+  }
+  return halftones.get(hex);
+}
+const shade = (hex) => (L().halftone ? halftone(hex) : alpha(hex, L().fillAlpha));
 
 let weeks = [];
 let current = null; // { season, week }
@@ -131,11 +190,31 @@ const overlayPlugin = {
     const st = chart.$state;
     if (!st) return;
     const { ctx, chartArea, scales } = chart;
+    const look = L();
     ctx.save();
+    // Scoreboard: a panel of unlit bulbs behind the chart.
+    // Blueprint: graph paper, with a heavier line every fifth square.
+    if (look.paperGrid) {
+      ctx.lineWidth = 1;
+      for (let i = 0, x = chartArea.left; x <= chartArea.right; x += 10, i++) {
+        ctx.strokeStyle = i % 5 ? alpha(css('--ink'), 0.07) : alpha(css('--ink'), 0.16);
+        ctx.beginPath(); ctx.moveTo(x + 0.5, chartArea.top); ctx.lineTo(x + 0.5, chartArea.bottom); ctx.stroke();
+      }
+      for (let i = 0, y = chartArea.bottom; y >= chartArea.top; y -= 10, i++) {
+        ctx.strokeStyle = i % 5 ? alpha(css('--ink'), 0.07) : alpha(css('--ink'), 0.16);
+        ctx.beginPath(); ctx.moveTo(chartArea.left, y - 0.5); ctx.lineTo(chartArea.right, y - 0.5); ctx.stroke();
+      }
+    }
+    if (look.dotGrid) {
+      ctx.fillStyle = css('--grid');
+      for (let y = chartArea.top + 3; y < chartArea.bottom; y += 7) {
+        for (let x = chartArea.left + 3; x < chartArea.right; x += 7) ctx.fillRect(x - 1, y - 1, 2, 2);
+      }
+    }
     ctx.strokeStyle = css('--axis');
     ctx.fillStyle = css('--muted');
     ctx.lineWidth = 1;
-    ctx.font = '11px system-ui, sans-serif';
+    ctx.font = `${look.fontWeight} 11px ${look.font}`;
     // Whole week: faint band behind each game window.
     ctx.fillStyle = alpha(css('--ink-2'), 0.07);
     for (const [a, b] of st.bands) {
@@ -151,9 +230,12 @@ const overlayPlugin = {
       ctx.moveTo(px, chartArea.top);
       ctx.lineTo(px, chartArea.bottom);
       ctx.stroke();
-      ctx.fillText(fmtDay(g.ts), px + 4, chartArea.top + 10);
+      const label = fmtDay(g.ts);
+      ctx.fillText(look.upperTicks ? label.toUpperCase() : label, px + 4, chartArea.top + 10);
     }
-    ctx.setLineDash([]);
+    ctx.setLineDash(look.midDash);
+    ctx.lineCap = 'round';
+    ctx.lineWidth = look.dotGrid ? 2.5 : 1;
     const y50 = scales.y.getPixelForValue(50);
     ctx.beginPath();
     ctx.moveTo(chartArea.left, y50);
@@ -222,17 +304,17 @@ function makeCard(m) {
   card.className = 'card';
   card.innerHTML = `
     <div class="teams">
-      <div class="team"><span class="swatch a-sw"></span><span class="name a-name"></span></div>
-      <div class="nums"><span class="pts a-pts"></span> <span class="proj a-proj"></span> <span class="pct a-pct"></span></div>
-      <div class="team"><span class="swatch b-sw"></span><span class="name b-name"></span></div>
-      <div class="nums"><span class="pts b-pts"></span> <span class="proj b-proj"></span> <span class="pct b-pct"></span></div>
+      <div class="trow a"><span class="swatch"></span><span class="name a-name"></span><span class="lead"></span>
+        <span class="proj a-proj"></span><span class="pts a-pts"></span><span class="pct a-pct"></span></div>
+      <div class="trow b"><span class="swatch"></span><span class="name b-name"></span><span class="lead"></span>
+        <span class="proj b-proj"></span><span class="pts b-pts"></span><span class="pct b-pct"></span></div>
     </div>
     <div class="chart-wrap"><canvas role="img"></canvas></div>
     <details class="swings" open><summary>Big swings <span class="count"></span></summary><ul></ul></details>`;
   $('grid').appendChild(card);
   const q = (s) => card.querySelector(s);
   const els = {
-    aName: q('.a-name'), bName: q('.b-name'), aSw: q('.a-sw'), bSw: q('.b-sw'),
+    aName: q('.a-name'), bName: q('.b-name'), aRow: q('.trow.a'), bRow: q('.trow.b'),
     aPts: q('.a-pts'), bPts: q('.b-pts'),
     aProj: q('.a-proj'), bProj: q('.b-proj'),
     aPct: q('.a-pct'), bPct: q('.b-pct'),
@@ -240,7 +322,7 @@ function makeCard(m) {
   };
 
   // Scriptable options get the chart through their context; `chart` isn't assigned yet on first draw.
-  const color = (c, side) => (c.chart.$state ? c.chart.$state.colors[side] : css(side === 'a' ? '--team-a' : '--team-b'));
+  const color = (c, side) => (c.chart.$state ? c.chart.$state.lineColors[side] : css(side === 'a' ? '--team-a' : '--team-b'));
   const chart = new Chart(els.canvas, {
     type: 'line',
     data: {
@@ -261,10 +343,23 @@ function makeCard(m) {
           parsing: false,
           showLine: false,
           fill: false,
-          pointRadius: (c) => (c.raw && c.chart.$state && c.raw.ev.id === c.chart.$state.highlight ? 6.5 : 4),
-          pointHoverRadius: (c) => (c.raw && c.chart.$state && c.raw.ev.id === c.chart.$state.highlight ? 6.5 : 4),
-          pointBackgroundColor: (c) => (c.raw ? c.raw.ev.color : 'transparent'),
-          pointBorderColor: () => css('--surface'),
+          pointRadius: (c) => (c.raw && c.chart.$state && c.raw.ev.id === c.chart.$state.highlight ? L().dotRadius + 2.5 : L().dotRadius),
+          pointHoverRadius: (c) => (c.raw && c.chart.$state && c.raw.ev.id === c.chart.$state.highlight ? L().dotRadius + 2.5 : L().dotRadius),
+          // Broadcast: solid team dot. Paper: hollow ink-tinted ring. Scoreboard: lit amber bulb.
+          pointBackgroundColor: (c) => {
+            if (!c.raw) return 'transparent';
+            const look = L();
+            if (look.dot === 'hollow') return css('--surface');
+            if (look.dot === 'bulb') return css('--ink-2');
+            return c.raw.ev.color;
+          },
+          pointBorderColor: (c) => {
+            if (!c.raw) return 'transparent';
+            const look = L();
+            if (look.dot === 'hollow') return inked(c.raw.ev.color, look.inkMix);
+            if (look.dot === 'bulb') return c.raw.ev.color;
+            return css('--surface');
+          },
           pointBorderWidth: 2,
           order: 1,
         },
@@ -280,7 +375,7 @@ function makeCard(m) {
           pointHoverRadius: 0,
           segment: { borderColor: (c) => ((c.p0.parsed.y + c.p1.parsed.y) / 2 >= 50 ? color(c, 'a') : color(c, 'b')) },
           borderColor: (c) => color(c, 'a'),
-          fill: { target: { value: 50 }, above: (c) => alpha(color(c, 'a'), 0.14), below: (c) => alpha(color(c, 'b'), 0.14) },
+          fill: { target: { value: 50 }, above: (c) => shade(color(c, 'a')), below: (c) => shade(color(c, 'b')) },
           order: 2,
         },
       ],
@@ -343,6 +438,7 @@ function makeCard(m) {
 }
 
 function render(data) {
+  lastData = data;
   threshold = data.settings ? data.settings.eventThreshold : threshold;
   const colorById = new Map(((data.settings && data.settings.teams) || []).map((t) => [t.roster_id, t.color]));
   for (const t of (data.settings && data.settings.teams) || []) avatarById.set(t.roster_id, t.avatar);
@@ -379,10 +475,13 @@ function render(data) {
       });
 
     const prevHighlight = chart.$state && chart.$state.highlight;
+    const ink = L().inkMix;
     chart.$state = {
       id: m.matchup_id, mode: data.mode, first: data.first, series: m.series, xs, gaps, bands,
-      a: m.a.name, b: m.b.name, colors, events, highlight: prevHighlight,
+      a: m.a.name, b: m.b.name, colors, lineColors: { a: inked(colors.a, ink), b: inked(colors.b, ink) },
+      events, highlight: prevHighlight,
     };
+    styleChart(chart);
     chart.data.datasets[0].data = m.series.map((s, i) => ({ x: xs[i], y: s[1] * 100 }));
     chart.data.datasets[1].data = events.map((e) => ({ x: e.x, y: e.y, ev: e }));
     chart.data.datasets[2].data = smoothLine(m.series, xs);
@@ -395,12 +494,15 @@ function render(data) {
     els.bName.textContent = m.b.name;
     els.aName.title = m.a.owner || '';
     els.bName.title = m.b.owner || '';
-    els.aSw.style.background = colors.a;
-    els.bSw.style.background = colors.b;
+    els.aRow.style.setProperty('--tc', colors.a);
+    els.bRow.style.setProperty('--tc', colors.b);
     if (last) {
       const [, p, ap, bp, aproj, bproj] = last;
-      els.aPct.textContent = pct(p);
-      els.bPct.textContent = pct(1 - p);
+      // The % sign (or "pct.") comes from the look's CSS.
+      els.aPct.textContent = Math.round(p * 100);
+      els.bPct.textContent = Math.round((1 - p) * 100);
+      els.aRow.classList.toggle('leader', p >= 0.5);
+      els.bRow.classList.toggle('leader', p < 0.5);
       els.aPts.textContent = ap.toFixed(2);
       els.bPts.textContent = bp.toFixed(2);
       els.aProj.textContent = `proj ${aproj.toFixed(1)}`;
@@ -412,10 +514,11 @@ function render(data) {
     els.count.textContent = events.length ? `(${events.length})` : '';
     els.swings.hidden = !events.length;
     els.list.innerHTML = [...events].reverse().map((e) => `
-      <li data-id="${e.id}">${bubbleHtml(e, 26)}
+      <li data-id="${e.id}" style="--tc:${e.color}">${bubbleHtml(e, 26)}
       <span class="sw-time">${fmtTime(e.ts)}</span>
       <span class="sw-text">${esc(e.text)}</span>
-      <b class="sw-delta">+${Math.round(e.delta * 100)}% ${esc(e.team)}</b></li>`).join('');
+      <b class="sw-pct">+${Math.round(e.delta * 100)}%</b>
+      <span class="sw-team">${esc(e.team)}</span></li>`).join('');
     for (const li of els.list.children) {
       const setHl = (id) => { chart.$state.highlight = id; chart.update('none'); };
       li.onmouseenter = () => setHl(Number(li.dataset.id));
@@ -450,7 +553,7 @@ function updateStatus() {
   if (!lastTs) return;
   const ago = Math.max(0, Math.round(Date.now() / 1000 - lastTs));
   $('status').innerHTML = (ago < 120
-    ? `<span class="live-dot"></span>Live · updated ${ago}s ago`
+    ? `<span class="live-tag">Live</span> updated ${ago}s ago`
     : `Last update ${fmtFull(lastTs)}`) + (fallbackNote ? ' · No games yet this week, showing the whole week' : '');
 }
 let fallbackNote = false;
@@ -479,9 +582,21 @@ async function init() {
   current = weeks[0];
   sel.onchange = () => { current = weeks[Number(sel.value)]; load(); };
   buildViewToggle();
+  window.Looks.onChange(() => { if (lastData) render(lastData); });
+  // Charts draw on a canvas, which won't pick up a web font that arrives late; redraw then.
+  if (document.fonts) document.fonts.addEventListener('loadingdone', () => { if (lastData) render(lastData); });
   await load();
 
   window.addEventListener('scroll', () => { panel.hidden = true; }, { passive: true });
+  // Teletext's page header clock ("Fri 20 Nov 21:14/05"); hidden in the other looks.
+  const tick = () => {
+    const d = new Date();
+    const two = (n) => String(n).padStart(2, '0');
+    $('tt-clock').textContent = `${d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' }).replace(',', '')} ${two(d.getHours())}:${two(d.getMinutes())}/${two(d.getSeconds())}`;
+  };
+  tick();
+  setInterval(tick, 1000);
+
   setInterval(() => {
     const live = lastTs && Date.now() / 1000 - lastTs < 300;
     if (live && current === weeks[0]) load().catch(() => {});

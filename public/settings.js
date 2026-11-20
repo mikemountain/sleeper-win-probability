@@ -67,4 +67,5 @@ $('save').onclick = async () => {
   setTimeout(() => { $('saved').textContent = ''; }, 2000);
 };
 
+window.Looks.onChange(() => { if (state) renderTeams(); });
 load().catch((e) => { $('teams').textContent = `Error: ${e.message}`; });
