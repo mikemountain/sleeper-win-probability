@@ -103,7 +103,7 @@
   --font-num: 'Courier Prime', 'Courier New', monospace;
 }
 [data-look="paper"] body { background: var(--page); }
-[data-look="paper"] header { flex-direction: column; align-items: stretch; max-width: 1100px; }
+[data-look="paper"] header { flex-direction: column; align-items: stretch; max-width: 2400px; }
 [data-look="paper"] .masthead { text-align: center; border-top: 4px double var(--ink); border-bottom: 1px solid var(--ink); padding: 8px 0 6px; }
 [data-look="paper"] h1 { font-size: 40px; font-weight: 700; letter-spacing: 0.01em; }
 [data-look="paper"] .muted { font-family: var(--font-num); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
@@ -121,7 +121,7 @@
 [data-look="paper"] .segments button[aria-pressed="true"] { color: var(--ink); border-bottom: 2px solid var(--ink); font-weight: 700; }
 [data-look="paper"] select { background: var(--surface); border: 1px solid var(--ink); border-radius: 0; padding: 2px 6px; font-family: var(--font-num); }
 [data-look="paper"] .btn.primary { border: 1px solid var(--ink); padding: 4px 12px; color: var(--ink); font-weight: 700; }
-[data-look="paper"] .grid { max-width: 1100px; gap: 26px 30px; }
+[data-look="paper"] .grid { max-width: 2400px; gap: 26px 30px; }
 [data-look="paper"] .card { border-top: 2px solid var(--ink); padding-top: 10px; }
 [data-look="paper"] .trow { font-family: var(--font-num); font-size: 16px; gap: 6px; }
 [data-look="paper"] .trow .swatch { width: 8px; height: 8px; }
@@ -233,81 +233,94 @@
 }
 
 /* ================================================================
-   BLUEPRINT: an engineering drawing on graph paper
+   TRADING CARD: a 1970s football card on cream card stock
    ================================================================ */
-[data-look="blueprint"] {
-  --page: #0d2650;
-  --surface: #0f2c55;
-  --ink: #e8f0ff;
-  --ink-2: #b9cdf0;
-  --muted: #8ea8d6;
-  --grid: #1d4277;
-  --axis: #b9cdf0;
-  --border: #b9cdf0;
-  --team-a: #e0603e;
-  --team-b: #1aa88a;
-  --live: #e0603e;
-  --accent: #e8f0ff;
-  --font-body: 'IBM Plex Mono', 'Courier New', monospace;
-  --font-display: 'Architects Daughter', 'Comic Sans MS', cursive;
-  --font-num: 'IBM Plex Mono', 'Courier New', monospace;
+[data-look="card"] {
+  --page: #d8c49c;
+  --surface: #efe3c8;
+  --stock: #fff8e6;
+  --red: #c0392b;
+  --ink: #2b1d12;
+  --ink-2: #5a4330;
+  --muted: #7a6249;
+  --grid: #e6d6b4;
+  --axis: #5a4330;
+  --border: #c0392b;
+  --team-a: #0b6fa4;
+  --team-b: #c9720e;
+  --live: #c0392b;
+  --accent: #c0392b;
+  --gold: #f5c04a;
+  --font-body: 'Archivo', 'Arial', sans-serif;
+  --font-display: 'Alfa Slab One', 'Rockwell', serif;
+  --font-num: 'Alfa Slab One', 'Rockwell', serif;
 }
-[data-look="blueprint"] body {
+[data-look="card"] body {
   font-size: 14px;
   background-color: var(--page);
-  background-image:
-    linear-gradient(rgba(232, 240, 255, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(232, 240, 255, 0.06) 1px, transparent 1px);
-  background-size: 20px 20px;
+  /* faint diagonal ribbing, like the cardboard box the packs came in */
+  background-image: repeating-linear-gradient(135deg, rgba(43, 29, 18, 0.035) 0 2px, transparent 2px 9px);
 }
-[data-look="blueprint"] .masthead { border: 1.5px solid var(--ink); padding: 8px 14px; background: var(--surface); }
-[data-look="blueprint"] h1 { font-size: 32px; letter-spacing: 0.02em; }
-[data-look="blueprint"] .muted { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
-[data-look="blueprint"] .live-tag { border: 1px solid var(--live); color: var(--live); padding: 0 5px; margin-right: 6px; }
-[data-look="blueprint"] .control-label { font-family: var(--font-display); font-size: 16px; color: var(--ink-2); }
-[data-look="blueprint"] .segments button,
-[data-look="blueprint"] select,
-[data-look="blueprint"] a.button,
-[data-look="blueprint"] .btn {
-  background: transparent; color: var(--ink-2); border: 1px solid var(--ink-2); border-radius: 0;
-  padding: 4px 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em;
+[data-look="card"] h1 {
+  display: inline-block; font-size: 38px; line-height: 1.1; color: var(--stock);
+  background: var(--red); padding: 4px 18px 6px; border-radius: 999px;
+  transform: rotate(-1.5deg); box-shadow: 4px 4px 0 var(--ink);
 }
-[data-look="blueprint"] select option { background: var(--surface); }
-[data-look="blueprint"] .segments button[aria-pressed="true"],
-[data-look="blueprint"] .btn.primary { background: var(--ink); color: var(--page); border-color: var(--ink); }
-[data-look="blueprint"] .card { border: 1.5px solid var(--ink); background: var(--surface); padding: 0 0 8px; }
-[data-look="blueprint"] .teams { gap: 0; border-bottom: 1.5px solid var(--ink); margin-bottom: 8px; }
-[data-look="blueprint"] .trow { gap: 0; }
-[data-look="blueprint"] .trow + .trow { border-top: 1px solid var(--ink-2); }
-[data-look="blueprint"] .trow > * { padding: 6px 10px; }
-[data-look="blueprint"] .trow .swatch { width: 4px; height: auto; align-self: stretch; padding: 0; }
-[data-look="blueprint"] .trow .name { font-family: var(--font-display); font-size: 19px; }
-[data-look="blueprint"] .trow .lead { padding: 0; }
-[data-look="blueprint"] .trow .proj { color: var(--muted); font-size: 11px; border-left: 1px solid var(--ink-2); align-self: stretch; display: flex; align-items: center; }
-[data-look="blueprint"] .trow .pts { border-left: 1px solid var(--ink-2); align-self: stretch; display: flex; align-items: center; font-weight: 600; }
-[data-look="blueprint"] .trow .pct { border-left: 1px solid var(--ink-2); align-self: stretch; display: flex; align-items: center; justify-content: flex-end; min-width: 64px; color: var(--tc); font-weight: 600; font-size: 16px; }
-[data-look="blueprint"] .trow .pct::after { content: "%"; }
-[data-look="blueprint"] .chart-wrap { margin: 0 8px; }
-[data-look="blueprint"] .swings { margin: 8px 10px 0; border-top: 1px dashed var(--ink-2); }
-[data-look="blueprint"] .swings summary { font-family: var(--font-display); font-size: 17px; color: var(--ink); }
-[data-look="blueprint"] .swings summary::after { content: ":"; }
-[data-look="blueprint"] .swings ul { counter-reset: note; }
-[data-look="blueprint"] .swings li { counter-increment: note; font-size: 12px; border-bottom: 1px dotted var(--grid); }
-[data-look="blueprint"] .swings li::before { content: counter(note) "."; color: var(--muted); }
-[data-look="blueprint"] .swings li:hover { background: var(--grid); }
-[data-look="blueprint"] .sw-time { color: var(--muted); }
-[data-look="blueprint"] .sw-pct { color: var(--tc); }
-[data-look="blueprint"] .sw-team { font-family: var(--font-display); font-size: 14px; }
-[data-look="blueprint"] .hover-panel { background: var(--surface); border: 1.5px solid var(--ink); padding: 10px 12px; font-size: 12px; }
-[data-look="blueprint"] .hp-name { font-family: var(--font-display); font-size: 16px; }
-[data-look="blueprint"] .hp-time, [data-look="blueprint"] .hp-sub { color: var(--muted); }
-[data-look="blueprint"] .hp-event { border-top: 1px dashed var(--ink-2); }
-[data-look="blueprint"] .settings section { border: 1.5px solid var(--ink); background: var(--surface); }
-[data-look="blueprint"] .settings h2 { font-size: 22px; }
-[data-look="blueprint"] .team-row { border-top: 1px dotted var(--ink-2); }
-[data-look="blueprint"] .team-row .name { font-family: var(--font-display); font-size: 17px; }
-[data-look="blueprint"] .warn { border: 1px dashed var(--live); }
+[data-look="card"] .muted { color: var(--ink-2); font-weight: 500; }
+[data-look="card"] .live-tag { background: var(--red); color: var(--stock); font-family: var(--font-display); padding: 0 8px; border-radius: 999px; margin-right: 6px; }
+[data-look="card"] .control-label { font-family: var(--font-display); color: var(--red); }
+[data-look="card"] .segments button,
+[data-look="card"] select,
+[data-look="card"] a.button,
+[data-look="card"] .btn {
+  background: var(--stock); color: var(--ink); border: 2px solid var(--ink); border-radius: 999px;
+  padding: 3px 12px; font-weight: 700; font-size: 13px;
+}
+[data-look="card"] .segments button[aria-pressed="true"],
+[data-look="card"] .btn.primary { background: var(--ink); color: var(--gold); }
 
+/* The card: cream stock, white border, red keyline, rounded corners */
+[data-look="card"] .grid { counter-reset: game; gap: 24px; }
+[data-look="card"] .card {
+  counter-increment: game;
+  background: var(--surface); border: 7px solid var(--stock); outline: 3px solid var(--red); outline-offset: -3px;
+  border-radius: 16px; padding: 12px 14px 10px; box-shadow: 5px 6px 0 rgba(43, 29, 18, 0.35);
+}
+[data-look="card"] .card::before {
+  content: "Game " counter(game); display: inline-block; margin: 0 0 8px;
+  font-family: var(--font-display); font-size: 17px; color: var(--stock); background: var(--red);
+  padding: 1px 14px 3px; border-radius: 999px; transform: rotate(-2deg);
+}
+[data-look="card"] .teams { gap: 4px; }
+[data-look="card"] .trow { font-weight: 800; font-size: 17px; color: var(--ink); }
+[data-look="card"] .trow .swatch { width: 16px; height: 16px; border-radius: 50%; box-shadow: 0 0 0 2px var(--stock); }
+[data-look="card"] .trow .proj { font-weight: 500; font-size: 12px; color: var(--muted); }
+[data-look="card"] .trow .pts { font-weight: 800; }
+[data-look="card"] .trow .pct { font-family: var(--font-display); font-size: 20px; color: var(--tc); min-width: 3.4em; text-align: right; }
+[data-look="card"] .trow .pct::after { content: "%"; font-size: 14px; }
+[data-look="card"] .chart-wrap { background: var(--stock); border-radius: 10px; }
+[data-look="card"] .swings { margin-top: 8px; }
+[data-look="card"] .swings summary { font-family: var(--font-display); color: var(--red); }
+[data-look="card"] .swings li { background: var(--ink); color: var(--surface); border-radius: 8px; margin-top: 4px; font-size: 13px; }
+[data-look="card"] .swings li:hover { background: #45301f; }
+[data-look="card"] .sw-pct { font-family: var(--font-display); color: var(--gold); }
+[data-look="card"] .sw-time { color: #c9b48f; }
+[data-look="card"] .sw-team { font-weight: 800; }
+[data-look="card"] .hover-panel {
+  background: var(--stock); border: 3px solid var(--red); border-radius: 12px; padding: 10px 12px;
+  box-shadow: 4px 4px 0 rgba(43, 29, 18, 0.35);
+}
+[data-look="card"] .hp-name { font-weight: 800; }
+[data-look="card"] .hp-row b { font-family: var(--font-display); font-weight: 400; color: var(--tc); }
+[data-look="card"] .hp-time, [data-look="card"] .hp-sub { color: var(--muted); }
+[data-look="card"] .hp-event { border-top: 2px dashed var(--red); }
+[data-look="card"] .settings section {
+  background: var(--surface); border: 7px solid var(--stock); outline: 3px solid var(--red); outline-offset: -3px; border-radius: 16px;
+}
+[data-look="card"] .settings h2 { font-family: var(--font-display); font-weight: 400; color: var(--red); font-size: 24px; }
+[data-look="card"] .team-row { border-top: 2px dotted var(--grid); }
+[data-look="card"] .team-row .name { font-weight: 800; }
+[data-look="card"] .warn { border: 2px solid var(--red); border-radius: 10px; }
 /* ================================================================
    RISO: a two-ink risograph zine (fluorescent pink + blue)
    ================================================================ */
@@ -467,9 +480,9 @@
 [data-look="teletext"] .warn { color: var(--tt-red); }
 
 @media (max-width: 480px) {
-  [data-look="blueprint"] h1 { font-size: 26px; }
-  [data-look="blueprint"] .trow > * { padding: 5px 7px; }
-  [data-look="blueprint"] .trow .name { font-size: 16px; }
+  [data-look="card"] h1 { font-size: 28px; }
+  [data-look="card"] .trow { font-size: 15px; }
+  [data-look="card"] .card { padding: 10px 10px 8px; }
   [data-look="riso"] h1 { font-size: 34px; }
   [data-look="riso"] .trow { font-size: 15px; }
   [data-look="riso"] .trow .pct { min-width: 52px; }

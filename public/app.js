@@ -14,7 +14,19 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&
 const fmtTime = (ts) => new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 const fmtDay = (ts) => new Date(ts * 1000).toLocaleDateString([], { weekday: 'short', month: 'numeric', day: 'numeric' });
 const fmtFull = (ts) => `${fmtDay(ts)} ${new Date(ts * 1000).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })}`;
-const pct = (p) => `${Math.round(p * 100)}%`;
+// Win % as shown. 100% and 0% are kept for matchups that are actually over
+// (no projected points left on either side); before that a near-certain result
+// reads like "99.6" / "0.4", because one late TD can still move it.
+function winNum(p, over) {
+  const n = Math.round(p * 100);
+  if (over) return String(n);
+  // Above 99% or below 1%: one decimal, never rounded all the way to 100.0 / 0.0.
+  if (p > 0.99) return Math.min(99.9, Math.round(p * 1000) / 10).toFixed(1);
+  if (p < 0.01) return Math.max(0.1, Math.round(p * 1000) / 10).toFixed(1);
+  return String(n);
+}
+const isOver = (ap, bp, aproj, bproj) => Math.abs(aproj - ap) < 0.05 && Math.abs(bproj - bp) < 0.05;
+const pct = (p, over = true) => `${winNum(p, over)}%`;
 const L = () => window.Looks.chart();
 let lastData = null;
 
@@ -78,7 +90,6 @@ const shade = (hex) => (L().halftone ? halftone(hex) : alpha(hex, L().fillAlpha)
 let weeks = [];
 let current = null; // { season, week }
 let view = readView(); // 'game' (Gametime) or 'week' (Whole week)
-let threshold = 5;
 const charts = new Map(); // matchup_id -> { chart, els }
 let lastTs = null;
 const panel = $('hover-panel');
@@ -99,7 +110,7 @@ function avatarUrl(who) {
 function bubbleHtml(e, size) {
   const url = avatarUrl(e.who);
   const style = `--ring:${e.color};width:${size}px;height:${size}px`;
-  if (!url) return `<span class="bubble empty" style="${style}"></span>`;
+  if (!url) return `<span class="bubble no-photo" style="${style}"></span>`;
   const headshot = !['DEF', 'TEAM'].includes(e.who.pos);
   return `<span class="bubble${headshot ? ' headshot' : ''}" style="${style}" title="${esc(e.who.name || '')}"><img src="${url}" alt="" loading="lazy"
     onerror="this.parentNode.classList.add('empty');this.remove()"></span>`;
@@ -193,18 +204,6 @@ const overlayPlugin = {
     const look = L();
     ctx.save();
     // Scoreboard: a panel of unlit bulbs behind the chart.
-    // Blueprint: graph paper, with a heavier line every fifth square.
-    if (look.paperGrid) {
-      ctx.lineWidth = 1;
-      for (let i = 0, x = chartArea.left; x <= chartArea.right; x += 10, i++) {
-        ctx.strokeStyle = i % 5 ? alpha(css('--ink'), 0.07) : alpha(css('--ink'), 0.16);
-        ctx.beginPath(); ctx.moveTo(x + 0.5, chartArea.top); ctx.lineTo(x + 0.5, chartArea.bottom); ctx.stroke();
-      }
-      for (let i = 0, y = chartArea.bottom; y >= chartArea.top; y -= 10, i++) {
-        ctx.strokeStyle = i % 5 ? alpha(css('--ink'), 0.07) : alpha(css('--ink'), 0.16);
-        ctx.beginPath(); ctx.moveTo(chartArea.left, y - 0.5); ctx.lineTo(chartArea.right, y - 0.5); ctx.stroke();
-      }
-    }
     if (look.dotGrid) {
       ctx.fillStyle = css('--grid');
       for (let y = chartArea.top + 3; y < chartArea.bottom; y += 7) {
@@ -271,9 +270,10 @@ function externalTooltip({ chart, tooltip }) {
   const [ts, p, ap, bp, aproj, bproj] = st.series[point.dataIndex];
   const px = point.element.x;
   const nearby = st.events.filter((e) => Math.abs(chart.scales.x.getPixelForValue(e.x) - px) <= EVENT_HOVER_PX);
+  const over = isOver(ap, bp, aproj, bproj);
   const row = (name, color, prob, pts, proj) => `
     <div class="hp-row"><span class="swatch" style="background:${color}"></span><span class="hp-name">${esc(name)}</span>
-    <b>${pct(prob)}</b></div><div class="hp-sub">${pts.toFixed(2)} pts · proj ${proj.toFixed(1)}</div>`;
+    <b>${pct(prob, over)}</b></div><div class="hp-sub">${pts.toFixed(2)} pts · proj ${proj.toFixed(1)}</div>`;
   panel.innerHTML = `
     <div class="hp-time">${fmtFull(ts)}</div>
     ${row(st.a, st.colors.a, p, ap, aproj)}
@@ -439,9 +439,11 @@ function makeCard(m) {
 
 function render(data) {
   lastData = data;
-  threshold = data.settings ? data.settings.eventThreshold : threshold;
-  const colorById = new Map(((data.settings && data.settings.teams) || []).map((t) => [t.roster_id, t.color]));
-  for (const t of (data.settings && data.settings.teams) || []) avatarById.set(t.roster_id, t.avatar);
+  const threshold = window.TeamColors.threshold(); // this viewer's "big swing" size, in points
+  const mine = window.TeamColors.mine();
+  // A color this viewer picked, else the look's default.
+  const colorById = new Map((data.teams || []).map((t) => [t.roster_id, mine[t.roster_id]]));
+  for (const t of data.teams || []) avatarById.set(t.roster_id, t.avatar);
   const ids = new Set(data.matchups.map((m) => m.matchup_id));
   for (const [id, c] of charts) {
     if (!ids.has(id)) {
@@ -499,15 +501,16 @@ function render(data) {
     if (last) {
       const [, p, ap, bp, aproj, bproj] = last;
       // The % sign (or "pct.") comes from the look's CSS.
-      els.aPct.textContent = Math.round(p * 100);
-      els.bPct.textContent = Math.round((1 - p) * 100);
+      const over = isOver(ap, bp, aproj, bproj);
+      els.aPct.textContent = winNum(p, over);
+      els.bPct.textContent = winNum(1 - p, over);
       els.aRow.classList.toggle('leader', p >= 0.5);
       els.bRow.classList.toggle('leader', p < 0.5);
       els.aPts.textContent = ap.toFixed(2);
       els.bPts.textContent = bp.toFixed(2);
       els.aProj.textContent = `proj ${aproj.toFixed(1)}`;
       els.bProj.textContent = `proj ${bproj.toFixed(1)}`;
-      els.canvas.setAttribute('aria-label', `${m.a.name} ${pct(p)} vs ${m.b.name} ${pct(1 - p)} win probability over time`);
+      els.canvas.setAttribute('aria-label', `${m.a.name} ${pct(p, over)} vs ${m.b.name} ${pct(1 - p, over)} win probability over time`);
     }
 
     // Swing list, newest first.
@@ -572,7 +575,6 @@ async function load() {
 async function init() {
   fetch('api/meta').then((r) => r.json()).then((m) => {
     if (m.name) { $('league-title').textContent = m.name; document.title = `${m.name} · Win probability`; }
-    $('settings-link').hidden = !m.admin; // the public site has no settings
   }).catch(() => {});
 
   weeks = await (await fetch('api/weeks')).json();

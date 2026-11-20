@@ -1,6 +1,6 @@
 # Putting the tracker on your DigitalOcean droplet
 
-Once this is done, the droplet runs two background services: the collector and the website. They start on boot and restart themselves if they crash. Your league opens **https://yoursite.com/winprob/**, and the settings page is only reachable through an SSH tunnel.
+Once this is done, the droplet runs two background services: the collector and the website. They start on boot and restart themselves if they crash. Your league opens **https://yoursite.com/winprob/**. Each viewer picks their own look, team colors and swing size on the Settings page; those choices stay in their browser.
 
 Replace `USER@DROPLET_IP` below with how you normally SSH in (e.g. `root@203.0.113.10`). The commands assume Ubuntu or Debian on the droplet, with nginx already serving your site.
 
@@ -60,16 +60,6 @@ sudo nginx -t && sudo systemctl reload nginx
 Open https://yoursite.com/winprob/ and the charts should be there. Link to it from any page of your site.
 
 > **If yoursite.com is still served from S3/CloudFront**, nginx on the droplet never sees those requests. In that case, point a subdomain like `winprob.yoursite.com` at the droplet, or add a CloudFront behavior for `/winprob/*` that uses the droplet as its origin.
-
-## Changing settings (team colors, swing threshold)
-
-The public page has no settings. To change them, open a tunnel from your PC:
-
-```bash
-ssh -L 3117:127.0.0.1:3117 USER@DROPLET_IP
-```
-
-While that's connected, open http://localhost:3117/settings.html on your PC. Changes show up on the public page right away.
 
 ## Day to day
 

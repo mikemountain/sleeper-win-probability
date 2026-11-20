@@ -34,5 +34,27 @@
     return `rgba(${r}, ${g}, ${b}, ${a})`;
   };
 
-  window.TeamColors = { css, distance, matchupColors, alpha, CLASH };
+  // Team colors this viewer picked on the settings page, saved in this browser only
+  // (like the look). They win over the look's default colors, for this viewer alone.
+  const MINE_KEY = 'winprob.teamColors';
+  function mine() {
+    try { return JSON.parse(localStorage.getItem(MINE_KEY)) || {}; } catch { return {}; }
+  }
+  function setMine(obj) {
+    try { localStorage.setItem(MINE_KEY, JSON.stringify(obj)); } catch { /* private window etc. */ }
+  }
+
+  // How big a swing (in win % points) this viewer wants marked. Also per browser.
+  const THRESHOLD_KEY = 'winprob.swingThreshold';
+  const DEFAULT_THRESHOLD = 5;
+  function threshold() {
+    let t = NaN;
+    try { t = Number(localStorage.getItem(THRESHOLD_KEY)); } catch { /* blocked storage */ }
+    return t >= 2 && t <= 30 ? t : DEFAULT_THRESHOLD;
+  }
+  function setThreshold(t) {
+    try { localStorage.setItem(THRESHOLD_KEY, String(t)); } catch { /* private window etc. */ }
+  }
+
+  window.TeamColors = { css, distance, matchupColors, alpha, CLASH, mine, setMine, threshold, setThreshold, DEFAULT_THRESHOLD };
 })();

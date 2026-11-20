@@ -8,12 +8,13 @@
     // Apply the saved look before anything draws, so the page never flashes the default.
     try {
       var l = localStorage.getItem('winprob.look');
-      document.documentElement.dataset.look = ['broadcast', 'paper', 'scoreboard', 'blueprint', 'riso', 'teletext'].indexOf(l) >= 0 ? l : 'broadcast';
+      if (l === 'blueprint') l = 'card'; // retired look
+      document.documentElement.dataset.look = ['broadcast', 'paper', 'scoreboard', 'card', 'riso', 'teletext'].indexOf(l) >= 0 ? l : 'broadcast';
     } catch (e) { document.documentElement.dataset.look = 'broadcast'; }
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Architects+Daughter&family=Barlow+Condensed:wght@500;600;700;800&family=Courier+Prime:wght@400;700&family=Doto:wght@700;800;900&family=Fragment+Mono&family=IBM+Plex+Mono:wght@400;600&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=VT323&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alfa+Slab+One&family=Archivo:wght@500;700;800&family=Archivo+Black&family=Architects+Daughter&family=Barlow+Condensed:wght@500;600;700;800&family=Courier+Prime:wght@400;700&family=Doto:wght@700;800;900&family=Fragment+Mono&family=IBM+Plex+Mono:wght@400;600&family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=VT323&display=swap">
   <link rel="stylesheet" href="styles.css">
   <link rel="stylesheet" href="looks.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -28,9 +29,7 @@
     <div class="controls">
       <label class="control-group"><span class="control-label">Week</span> <select id="week"></select></label>
       <div id="segments" class="segments" role="group" aria-label="Chart view"></div>
-      <div class="control-group"><span class="control-label">Look</span>
-        <div id="look-picker" class="segments" role="group" aria-label="Look"></div></div>
-      <a id="settings-link" class="button" href="settings.html" hidden>Settings</a>
+      <a class="button" href="settings.html">Settings</a>
     </div>
   </header>
   <main id="grid" class="grid"></main>

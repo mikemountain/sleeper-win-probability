@@ -1,4 +1,4 @@
-// Three looks for the site, picked per browser: Broadcast, Paper, Scoreboard.
+// Six looks for the site, picked per browser.
 // The CSS lives in looks.css, scoped to <html data-look="...">. This file
 // saves and applies the choice, draws the picker, and holds the chart
 // settings each look needs (the CSS can't reach inside the <canvas>).
@@ -8,7 +8,7 @@
     { id: 'broadcast', label: 'Broadcast' },
     { id: 'paper', label: 'Paper' },
     { id: 'scoreboard', label: 'Scoreboard' },
-    { id: 'blueprint', label: 'Blueprint' },
+    { id: 'card', label: 'Trading card' },
     { id: 'riso', label: 'Riso' },
     { id: 'teletext', label: 'Teletext' },
   ];
@@ -60,22 +60,21 @@
       dotRadius: 5,
       upperTicks: true,
     },
-    // Engineering drawing: thin linework on graph paper, center-line style 50% mark.
-    blueprint: {
-      font: "'IBM Plex Mono', 'Courier New', monospace",
-      fontSize: 11,
-      fontWeight: 400,
-      lineWidth: 2,
+    // 1970s football card: fat rounded strokes on cream stock, big dots.
+    card: {
+      font: "'Archivo', 'Arial', sans-serif",
+      fontSize: 12,
+      fontWeight: 700,
+      lineWidth: 4.5,
       dash: [],
       inkMix: 0,
-      fillAlpha: 0.12,
+      fillAlpha: 0.18,
       gridLines: false,
       dotGrid: false,
-      paperGrid: true,
-      midDash: [12, 4, 2, 4],
-      dot: 'hollow',
-      dotRadius: 4.5,
-      upperTicks: true,
+      midDash: [3, 5],
+      dot: 'fill',
+      dotRadius: 6,
+      upperTicks: false,
     },
     // Two-ink risograph print: fat strokes, halftone-dot shading.
     riso: {
@@ -120,6 +119,7 @@
   let current = document.documentElement.dataset.look;
   if (!valid(current)) {
     try { current = localStorage.getItem(KEY); } catch { current = null; }
+    if (current === 'blueprint') current = 'card'; // retired look
     if (!valid(current)) current = 'broadcast';
     document.documentElement.dataset.look = current;
   }
