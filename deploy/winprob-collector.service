@@ -7,7 +7,10 @@ Wants=network-online.target
 Type=simple
 User=winprob
 WorkingDirectory=/opt/sleeper-winprob
-ExecStart=/usr/bin/node collector.js
+# Keep memory small on a 1 GB droplet: a smaller JS heap makes Node clean up sooner.
+ExecStart=/usr/bin/node --max-old-space-size=96 collector.js
+MemoryHigh=200M
+MemoryMax=300M
 Restart=always
 RestartSec=5
 # The collector only needs to write its database.

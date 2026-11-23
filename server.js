@@ -2,6 +2,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const zlib = require('node:zlib');
 const config = require('./lib/config');
 const { open } = require('./lib/db');
 const { describe } = require('./lib/events');
@@ -30,10 +31,10 @@ const liveTsQ = db.prepare('SELECT DISTINCT ts FROM snapshots WHERE season = ? A
 // Bucket by `res` seconds; SQLite returns the other columns from the row with max(ts).
 const seriesAllQ = db.prepare(`SELECT matchup_id, roster_id, MAX(ts) AS ts, points, proj_final, win_prob
   FROM snapshots WHERE season = ? AND week = ? AND ts BETWEEN ? AND ?
-  GROUP BY matchup_id, roster_id, ts / ? ORDER BY ts`);
+  GROUP BY matchup_id, roster_id, ts / CAST(? AS INTEGER) ORDER BY ts`);
 const seriesLiveQ = db.prepare(`SELECT matchup_id, roster_id, MAX(ts) AS ts, points, proj_final, win_prob
   FROM snapshots WHERE season = ? AND week = ? AND ts BETWEEN ? AND ? AND live = 1
-  GROUP BY matchup_id, roster_id, ts / ? ORDER BY ts`);
+  GROUP BY matchup_id, roster_id, ts / CAST(? AS INTEGER) ORDER BY ts`);
 const WEEK_POINTS = 2000; // time buckets across the whole week
 const RANGE_GAP = 10 * 60; // live stretches closer than this count as one game window
 
@@ -151,11 +152,51 @@ function send(res, code, body, type = 'application/json') {
   res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body));
 }
 
+// Built API responses, shared by every viewer. During games every open page
+// asks for fresh data every 5 seconds; building a week's charts takes a few
+// hundred ms, so it's built at most once per FRESH_MS no matter how many
+// people are watching, and not at all for weeks that have stopped changing.
+const FRESH_MS = 4000;
+const CACHE_MAX = 12;
+const cache = new Map(); // key -> { stamp, at, raw, gz }
+const latestTsQ = db.prepare('SELECT MAX(ts) AS t FROM snapshots');
+const weekLatestQ = db.prepare('SELECT MAX(ts) AS t FROM snapshots WHERE season = ? AND week = ?');
+
+function cached(key, stamp, build) {
+  let c = cache.get(key);
+  const now = Date.now();
+  // Rebuild when the data changed (at most every FRESH_MS), and every 10 minutes
+  // regardless, to pick up renamed teams and late play labels.
+  if (!c || (c.stamp !== stamp && now - c.at >= FRESH_MS) || now - c.at > 10 * 60e3) {
+    const raw = Buffer.from(JSON.stringify(build()));
+    c = { stamp, at: now, raw, gz: zlib.gzipSync(raw, { level: 6 }) };
+    cache.delete(key);
+    cache.set(key, c);
+    if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value); // drop the oldest
+  }
+  return c;
+}
+
+function sendCached(req, res, c) {
+  const gzip = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+  res.writeHead(200, {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-store',
+    Vary: 'Accept-Encoding',
+    ...(gzip ? { 'Content-Encoding': 'gzip' } : {}),
+  });
+  res.end(gzip ? c.gz : c.raw);
+}
+
 function handler(req, res) {
   const url = new URL(req.url, 'http://localhost');
   try {
-    if (url.pathname === '/api/weeks') return send(res, 200, weeksQ.all());
-    if (url.pathname === '/api/teams') return send(res, 200, teamsData());
+    if (url.pathname === '/api/weeks') {
+      return sendCached(req, res, cached('weeks', latestTsQ.get().t, () => weeksQ.all()));
+    }
+    if (url.pathname === '/api/teams') {
+      return sendCached(req, res, cached('teams', latestTsQ.get().t, teamsData));
+    }
     if (url.pathname === '/api/meta') {
       getMeta().then((m) => send(res, 200, m), () => send(res, 200, { name: null }));
       return;
@@ -164,7 +205,9 @@ function handler(req, res) {
       const season = url.searchParams.get('season');
       const week = Number(url.searchParams.get('week'));
       const mode = url.searchParams.get('mode') === 'week' ? 'week' : 'game';
-      return send(res, 200, weekData(season, week, mode));
+      if (!season || !Number.isInteger(week)) return send(res, 400, { error: 'season and week required' });
+      const stamp = weekLatestQ.get(season, week).t;
+      return sendCached(req, res, cached(`week:${season}:${week}:${mode}`, stamp, () => weekData(season, week, mode)));
     }
     const file = path.normalize(path.join(PUBLIC, url.pathname === '/' ? 'index.html' : url.pathname));
     if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return send(res, 404, 'Not found', 'text/plain');

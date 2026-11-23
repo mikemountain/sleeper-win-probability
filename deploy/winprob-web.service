@@ -10,7 +10,10 @@ WorkingDirectory=/opt/sleeper-winprob
 # Local-only port for nginx to proxy.
 Environment=HOST=127.0.0.1
 Environment=PORT=3017
-ExecStart=/usr/bin/node server.js
+# Keep memory small on a 1 GB droplet: a smaller JS heap makes Node clean up sooner.
+ExecStart=/usr/bin/node --max-old-space-size=128 server.js
+MemoryHigh=250M
+MemoryMax=350M
 Restart=always
 RestartSec=5
 NoNewPrivileges=true

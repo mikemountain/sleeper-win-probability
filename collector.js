@@ -27,8 +27,10 @@ const insert = db.prepare(`INSERT OR REPLACE INTO snapshots
   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
 const upsertTeam = db.prepare(`INSERT INTO teams (roster_id, name, owner, avatar) VALUES (?, ?, ?, ?)
   ON CONFLICT (roster_id) DO UPDATE SET name = excluded.name, owner = excluded.owner, avatar = excluded.avatar`);
+// Includes matchup_id so SQLite can use the primary key (season, week,
+// matchup_id, roster_id, ts) and jump straight to the newest row.
 const lastRow = db.prepare(`SELECT points, win_prob, proj_final FROM snapshots
-  WHERE season = ? AND week = ? AND roster_id = ? ORDER BY ts DESC LIMIT 1`);
+  WHERE season = ? AND week = ? AND matchup_id = ? AND roster_id = ? ORDER BY ts DESC LIMIT 1`);
 const insertPlayerPts = db.prepare(`INSERT OR REPLACE INTO player_points (ts, season, week, roster_id, player_id, points)
   VALUES (?, ?, ?, ?, ?, ?)`);
 const lastPlayerPts = db.prepare(`SELECT roster_id, player_id, points, MAX(ts) AS ts FROM player_points
@@ -205,8 +207,8 @@ async function tick() {
   // quiet days between game windows stay empty on the chart.
   let toStore = rows;
   if (!active) {
-    toStore = rows.filter(([, rid, pts, proj, wp]) => {
-      const prev = lastRow.get(ctx.season, ctx.week, rid);
+    toStore = rows.filter(([mid, rid, pts, proj, wp]) => {
+      const prev = lastRow.get(ctx.season, ctx.week, mid, rid);
       return !prev || Math.abs(prev.points - pts) > 0.001 || Math.abs(prev.win_prob - wp) > 0.0005 || Math.abs(prev.proj_final - proj) > 0.05;
     });
   }
