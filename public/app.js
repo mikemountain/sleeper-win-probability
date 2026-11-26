@@ -4,7 +4,7 @@ const GAP_WIDTH = 10 * 60; // ...down to this much horizontal room
 const FLAT_EPS = 0.0005; // win-prob changes smaller than 0.05 points count as "flat"
 const JUMP = 0.02; // steps of 2+ points are real swings and stay sharp
 const VIEW_KEY = 'winprob.view';
-const REFRESH_MS = 5000;
+const REFRESH_MS = 15000; // live refresh; easy on a small server with many viewers
 const EVENT_HOVER_PX = 10; // hovering this close to a swing dot shows its story
 const PANEL_W = 260;
 
@@ -840,16 +840,29 @@ function updateStatus() {
 }
 let fallbackNote = false;
 
+// One request at a time: if a load is asked for while one is running (a slow
+// connection, or a week/view switch mid-refresh), run it once afterwards.
+let loading = false;
+let reloadAgain = false;
 async function load() {
   if (!current) return;
-  const p = new URLSearchParams({ season: current.season, week: current.week, mode: view });
-  const data = await (await fetch(`api/week?${p}`)).json();
-  lastTs = data.lastTs;
-  fallbackNote = !!data.fallback;
-  $('empty').hidden = data.matchups.length > 0;
-  render(data);
-  updateStatus();
+  if (loading) { reloadAgain = true; return; }
+  loading = true;
+  try {
+    const p = new URLSearchParams({ season: current.season, week: current.week, mode: view });
+    const data = await (await fetch(`api/week?${p}`)).json();
+    lastTs = data.lastTs;
+    fallbackNote = !!data.fallback;
+    $('empty').hidden = data.matchups.length > 0;
+    render(data);
+    updateStatus();
+  } finally {
+    loading = false;
+    if (reloadAgain) { reloadAgain = false; load().catch(() => {}); }
+  }
 }
+
+const isLive = () => lastTs && Date.now() / 1000 - lastTs < 300 && current === weeks[0];
 
 async function init() {
   fetch('api/meta').then((r) => r.json()).then((m) => {
@@ -882,10 +895,14 @@ async function init() {
   setInterval(tick, 1000);
 
   setInterval(() => {
-    const live = lastTs && Date.now() / 1000 - lastTs < 300;
-    if (live && current === weeks[0]) load().catch(() => {});
+    if (document.hidden) return; // nobody's looking: don't refresh a background tab
+    if (isLive()) load().catch(() => {});
     else updateStatus();
   }, REFRESH_MS);
+  // Back to the tab: catch up straight away instead of waiting for the next tick.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && isLive()) load().catch(() => {});
+  });
 }
 
 init().catch((e) => { $('status').textContent = `Error: ${e.message}`; });

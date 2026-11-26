@@ -221,7 +221,7 @@ function send(res, code, body, type = 'application/json') {
 }
 
 // Built API responses, shared by every viewer. During games every open page
-// asks for fresh data every 5 seconds; building a week's charts takes a few
+// asks for fresh data every 15 seconds; building a week's charts takes a few
 // hundred ms, so it's built at most once per FRESH_MS no matter how many
 // people are watching, and not at all for weeks that have stopped changing.
 const FRESH_MS = 4000;

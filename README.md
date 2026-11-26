@@ -11,7 +11,7 @@ Copy `config.local.example.json` to `config.local.json` and put your Sleeper lea
 - **Collector:** double-click `start-collector.cmd` (or run `node collector.js`). Leave the window open while games are on.
   - Stop it any time with Ctrl+C or by closing the window. Start it again later and it keeps appending to the same week.
   - When no NFL game is live or starting within 15 minutes, it checks once a minute and only saves changes. That means you can also just leave it running all week.
-- **Website:** double-click `start-site.cmd` (or run `node server.js`), then open http://localhost:3000. While the collector is running, the page refreshes itself every 5 seconds.
+- **Website:** double-click `start-site.cmd` (or run `node server.js`), then open http://localhost:3000. While the collector is running, the page refreshes itself every 15 seconds (paused while the tab is in the background).
 
 - **Bigger charts and zoom:** click a chart to open that matchup across most of the screen. Drag across any chart to zoom into that stretch of time at full detail (down to one point a second); drag again to zoom further, double-click or Zoom out to back out. Links like `/#m=3` open a matchup straight away.
 - **Swing markers:** dots on each chart, plus a "Big swings" list underneath, show when a team's win chance jumped and which player caused it. A play type such as "rec TD" or "FG" is added within a few minutes, once Sleeper's stats feed catches up. Until then a big jump says "(likely TD)".
