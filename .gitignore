@@ -13,3 +13,6 @@ Thumbs.db
 
 # Your league ID (see config.local.example.json)
 config.local.json
+
+# Build stamp written into deploy packages by deploy/pack.js
+VERSION

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Installs or updates the win probability tracker on an Ubuntu/Debian droplet.
 # Run from the unpacked folder:  sudo bash sleeper-winprob/deploy/setup.sh
-# Safe to re-run for updates: the database already on the server is kept.
+# Safe to re-run for updates: the database and config.local.json on the server are
+# kept; all app code is replaced with the packed version.
 set -euo pipefail
 
 APP_DIR=/opt/sleeper-winprob
@@ -28,8 +29,17 @@ if ! id winprob >/dev/null 2>&1; then
   useradd --system --home-dir "$APP_DIR" --shell /usr/sbin/nologin winprob
 fi
 
-echo "==> Copying app to $APP_DIR"
+NEW_VERSION="$(cat "$SRC_DIR/VERSION" 2>/dev/null || echo unknown)"
+OLD_VERSION="$(cat "$APP_DIR/VERSION" 2>/dev/null || echo none)"
+echo "==> Installing version $NEW_VERSION (was: $OLD_VERSION)"
+
+# Replace the app code exactly: remove everything except the database (data/)
+# and your league ID (config.local.json), then copy the new files in. Files
+# edited or added on the droplet don't survive an update, so the droplet always
+# runs exactly what was packed. A config.local.json in the package replaces the
+# droplet's; without one, the droplet's is kept.
 mkdir -p "$APP_DIR/data"
+find "$APP_DIR" -mindepth 1 -maxdepth 1 ! -name data ! -name config.local.json -exec rm -rf {} +
 (cd "$SRC_DIR" && tar --exclude=./data -cf - .) | (cd "$APP_DIR" && tar -xf -)
 if [ ! -f "$APP_DIR/data/winprob.db" ] && [ -f "$SRC_DIR/data/winprob.db" ]; then
   echo "==> First install: bringing over the history recorded on your PC"
@@ -66,6 +76,21 @@ fi
 sleep 2
 echo
 systemctl --no-pager --lines=0 status winprob-collector winprob-web | grep -E "●|Active:" || true
+echo
+# Confirm the website is serving the new build. The first start after an
+# update can take a few seconds while it builds database indexes.
+RUNNING=""
+for _ in $(seq 1 15); do
+  RUNNING="$(curl -s --max-time 2 http://127.0.0.1:3017/api/meta | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' || true)"
+  [ -n "$RUNNING" ] && break
+  sleep 1
+done
+if [ "$RUNNING" = "$NEW_VERSION" ]; then
+  echo "==> Website is running version $RUNNING"
+else
+  echo "!! Website reports version '${RUNNING:-no answer}', expected '$NEW_VERSION'."
+  echo "   Check: journalctl -u winprob-web -n 50"
+fi
 echo
 echo "Check it locally on the droplet:  curl -s http://127.0.0.1:3017/api/weeks"
 echo "Collector log:                    journalctl -u winprob-collector -f"

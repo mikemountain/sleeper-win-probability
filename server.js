@@ -200,6 +200,11 @@ function teamsData() {
   };
 }
 
+// Which build is running: VERSION is written by deploy/pack.js ("<commit> <build time>").
+// Check it on the live site at /winprob/api/meta.
+let VERSION = 'local';
+try { VERSION = fs.readFileSync(path.join(__dirname, 'VERSION'), 'utf8').trim(); } catch { /* not a packed build */ }
+
 let meta = null;
 async function getMeta() {
   if (!meta) {
@@ -261,7 +266,7 @@ function handler(req, res) {
       return sendCached(req, res, cached('teams', latestTsQ.get().t, teamsData));
     }
     if (url.pathname === '/api/meta') {
-      getMeta().then((m) => send(res, 200, m), () => send(res, 200, { name: null }));
+      getMeta().then((m) => send(res, 200, { ...m, version: VERSION }), () => send(res, 200, { name: null, version: VERSION }));
       return;
     }
     if (url.pathname === '/api/week') {
@@ -297,4 +302,4 @@ function handler(req, res) {
 
 const PORT = Number(process.env.PORT) || config.port;
 const HOST = process.env.HOST || undefined;
-http.createServer(handler).listen(PORT, HOST, () => console.log(`Win probability site: http://${HOST || 'localhost'}:${PORT}`));
+http.createServer(handler).listen(PORT, HOST, () => console.log(`Win probability site (${VERSION}): http://${HOST || 'localhost'}:${PORT}`));
