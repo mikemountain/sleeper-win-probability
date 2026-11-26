@@ -13,6 +13,7 @@ Copy `config.local.example.json` to `config.local.json` and put your Sleeper lea
   - When no NFL game is live or starting within 15 minutes, it checks once a minute and only saves changes. That means you can also just leave it running all week.
 - **Website:** double-click `start-site.cmd` (or run `node server.js`), then open http://localhost:3000. While the collector is running, the page refreshes itself every 5 seconds.
 
+- **Bigger charts and zoom:** click a chart to open that matchup across most of the screen. Drag across any chart to zoom into that stretch of time at full detail (down to one point a second); drag again to zoom further, double-click or Zoom out to back out. Links like `/#m=3` open a matchup straight away.
 - **Swing markers:** dots on each chart, plus a "Big swings" list underneath, show when a team's win chance jumped and which player caused it. A play type such as "rec TD" or "FG" is added within a few minutes, once Sleeper's stats feed catches up. Until then a big jump says "(likely TD)".
 - **Your settings** (Settings link at the top of the page): pick a look, your own team colors, and how big a swing needs to be before it gets a marker (default 5%). All saved in your browser only; nobody else sees them. The looks are Broadcast (TV graphics), Paper (newspaper sports page), Scoreboard (stadium board), Trading card (1970s football card), Riso (two-ink zine print) or Teletext (1980s TV text page).
 - **Weeks recorded before swing tracking:** run `node backfill-events.js` once to give them team-level markers.

@@ -243,7 +243,21 @@ const overlayPlugin = {
     ctx.restore();
   },
   afterDatasetsDraw(chart) {
-    const { ctx, chartArea, scales } = chart;
+    const { ctx, chartArea } = chart;
+    // Drag-to-zoom: shade the stretch being selected.
+    const sel = chart.$state && chart.$state.select;
+    if (sel) {
+      const x1 = Math.max(chartArea.left, Math.min(sel[0], sel[1]));
+      const x2 = Math.min(chartArea.right, Math.max(sel[0], sel[1]));
+      ctx.save();
+      ctx.fillStyle = alpha(css('--ink-2'), 0.14);
+      ctx.fillRect(x1, chartArea.top, x2 - x1, chartArea.bottom - chartArea.top);
+      ctx.strokeStyle = css('--ink-2');
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(x1 + 0.5, chartArea.top + 0.5, x2 - x1 - 1, chartArea.bottom - chartArea.top - 1);
+      ctx.restore();
+    }
     const active = chart.tooltip && chart.tooltip.getActiveElements().filter((a) => a.datasetIndex === 0);
     if (active && active.length) {
       const x = active[0].element.x;
@@ -259,12 +273,14 @@ const overlayPlugin = {
   },
 };
 
-/** Hover readout that sits beside the card, never under the cursor. */
+/** Hover readout that sits beside the card, never under the cursor. In the large view it fills the side column. */
 function externalTooltip({ chart, tooltip }) {
   const st = chart.$state;
   const point = (tooltip.dataPoints || []).find((d) => d.datasetIndex === 0);
-  if (!tooltip.opacity || !point || !st) {
-    if (panel.dataset.owner === String(st && st.id)) panel.hidden = true;
+  const readout = chart.canvas.closest('#detail') && chart.canvas.closest('.card').querySelector('.detail-readout');
+  if (!tooltip.opacity || !point || !st || st.select) {
+    if (readout) clearReadout(readout);
+    else if (panel.dataset.owner === String(st && st.id)) panel.hidden = true;
     return;
   }
   const [ts, p, ap, bp, aproj, bproj] = st.series[point.dataIndex];
@@ -274,12 +290,18 @@ function externalTooltip({ chart, tooltip }) {
   const row = (name, color, prob, pts, proj) => `
     <div class="hp-row"><span class="swatch" style="background:${color}"></span><span class="hp-name">${esc(name)}</span>
     <b>${pct(prob, over)}</b></div><div class="hp-sub">${pts.toFixed(2)} pts · proj ${proj.toFixed(1)}</div>`;
-  panel.innerHTML = `
+  const html = `
     <div class="hp-time">${fmtFull(ts)}</div>
     ${row(st.a, st.colors.a, p, ap, aproj)}
     ${row(st.b, st.colors.b, 1 - p, bp, bproj)}
     ${nearby.map((e) => `<div class="hp-event">${bubbleHtml(e, 32)}
       <div><b>+${Math.round(e.delta * 100)}% ${esc(e.team)}</b><div>${esc(e.text)}</div><div class="hp-sub">${fmtFull(e.ts)}</div></div></div>`).join('')}`;
+  if (readout) {
+    readout.innerHTML = html;
+    readout.classList.remove('idle');
+    return;
+  }
+  panel.innerHTML = html;
   panel.dataset.owner = String(st.id);
   panel.hidden = false;
 
@@ -299,9 +321,11 @@ function externalTooltip({ chart, tooltip }) {
   panel.style.top = `${top}px`;
 }
 
-function makeCard(m) {
+/** A matchup card. `big` builds the large view's version, with a side column for the readout. */
+function makeCard(m, container = $('grid'), big = false) {
   const card = document.createElement('section');
-  card.className = 'card';
+  card.className = big ? 'card big' : 'card';
+  const swings = '<details class="swings" open><summary>Big swings <span class="count"></span></summary><ul></ul></details>';
   card.innerHTML = `
     <div class="teams">
       <div class="trow a"><span class="swatch"></span><span class="name a-name"></span><span class="lead"></span>
@@ -310,8 +334,8 @@ function makeCard(m) {
         <span class="proj b-proj"></span><span class="pts b-pts"></span><span class="pct b-pct"></span></div>
     </div>
     <div class="chart-wrap"><canvas role="img"></canvas></div>
-    <details class="swings" open><summary>Big swings <span class="count"></span></summary><ul></ul></details>`;
-  $('grid').appendChild(card);
+    ${big ? `<div class="detail-side"><div class="detail-readout idle"></div>${swings}</div>` : swings}`;
+  container.appendChild(card);
   const q = (s) => card.querySelector(s);
   const els = {
     aName: q('.a-name'), bName: q('.b-name'), aRow: q('.trow.a'), bRow: q('.trow.b'),
@@ -399,8 +423,8 @@ function makeCard(m) {
               const st = this.chart.$state; // `this` is the scale
               if (!st || !st.series.length) return '';
               if (st.mode === 'week') {
-                // Under a day and a half of data: day names would be useless, show times.
-                if (this.max < 36 * 3600) return fmtTime(st.first + v);
+                // Under a day and a half on screen: day names would be useless, show times.
+                if (this.max - this.min < 36 * 3600) return fmtTime(st.first + v);
                 return new Date((st.first + v) * 1000).toLocaleDateString([], { weekday: 'short' });
               }
               return fmtTime(st.series[nearestIndex(st.xs, v)][0]);
@@ -409,11 +433,13 @@ function makeCard(m) {
           // Whole week: one label per day, at noon.
           afterBuildTicks(scale) {
             const st = scale.chart.$state;
-            if (!st || st.mode !== 'week' || scale.max < 36 * 3600) return;
+            if (!st || st.mode !== 'week' || scale.max - scale.min < 36 * 3600) return;
+            // Only days inside what's on screen (a zoomed chart starts mid-week).
             const ticks = [];
-            const d = new Date(st.first * 1000);
+            const lo = st.first + scale.min;
+            const d = new Date(lo * 1000);
             d.setHours(12, 0, 0, 0);
-            if (d.getTime() / 1000 < st.first) d.setDate(d.getDate() + 1);
+            if (d.getTime() / 1000 < lo) d.setDate(d.getDate() + 1);
             for (; d.getTime() / 1000 <= st.first + scale.max; d.setDate(d.getDate() + 1)) ticks.push({ value: d.getTime() / 1000 - st.first });
             scale.ticks = ticks;
           },
@@ -433,16 +459,90 @@ function makeCard(m) {
     },
     plugins: [overlayPlugin],
   });
-  els.canvas.addEventListener('mouseleave', () => { panel.hidden = true; });
-  return { chart, els };
+  els.canvas.addEventListener('mouseleave', () => {
+    panel.hidden = true;
+    const readout = card.querySelector('.detail-readout');
+    if (readout) clearReadout(readout);
+  });
+  if (big) chart.options.scales.x.ticks.maxTicksLimit = 12; // room for more time labels
+  const entry = { chart, els, card, mid: m.matchup_id, big };
+  attachDragZoom(entry);
+  return entry;
+}
+
+const DRAG_MIN_PX = 6; // less movement than this is a click, not a drag
+
+/**
+ * Click a chart: open the large view. Drag across it: zoom into that stretch of
+ * time (opening the large view first when it's a grid card). On the grid, touch
+ * keeps scrolling the page; in the large view a touch drag zooms too.
+ */
+function attachDragZoom(entry) {
+  const { chart, els, big } = entry;
+  const canvas = els.canvas;
+  let start = null;
+  const xOf = (e) => e.clientX - canvas.getBoundingClientRect().left;
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    if (!big && e.pointerType === 'touch') { start = { x: xOf(e), touch: true }; return; }
+    start = { x: xOf(e) };
+    canvas.setPointerCapture(e.pointerId);
+  });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!start || start.touch || !chart.$state) return;
+    const x = xOf(e);
+    if (Math.abs(x - start.x) < DRAG_MIN_PX && !chart.$state.select) return;
+    chart.$state.select = [start.x, x];
+    panel.hidden = true;
+    chart.draw();
+  });
+  const finish = (e, cancelled) => {
+    if (!start) return;
+    const s = start;
+    start = null;
+    const sel = chart.$state && chart.$state.select;
+    if (chart.$state) chart.$state.select = null;
+    chart.draw();
+    if (cancelled) return;
+    if (!sel || Math.abs(sel[1] - sel[0]) < DRAG_MIN_PX) {
+      if (!big && (!s.touch || Math.abs(xOf(e) - s.x) < DRAG_MIN_PX)) openDetail(entry.mid);
+      return;
+    }
+    const range = pixelsToRange(chart, sel[0], sel[1]);
+    if (!range) return;
+    if (big) zoomTo(range);
+    else openDetail(entry.mid, range);
+  };
+  canvas.addEventListener('pointerup', (e) => finish(e, false));
+  canvas.addEventListener('pointercancel', (e) => finish(e, true));
+  if (big) canvas.addEventListener('dblclick', () => resetZoom());
+}
+
+/** A selected pixel stretch as real times, or null if it covers less than two data points. */
+function pixelsToRange(chart, p1, p2) {
+  const st = chart.$state;
+  const { left, right } = chart.chartArea;
+  const clamp = (p) => Math.max(left, Math.min(right, p));
+  const v1 = chart.scales.x.getValueForPixel(clamp(Math.min(p1, p2)));
+  const v2 = chart.scales.x.getValueForPixel(clamp(Math.max(p1, p2)));
+  if (!st.series.length) return null;
+  // Whole week: x is seconds since the week's first row. Gametime: x is squeezed,
+  // so map through the nearest data point.
+  const toTs = (v) => (st.mode === 'week' ? st.first + v : st.series[nearestIndex(st.xs, v)][0]);
+  const from = Math.floor(toTs(v1));
+  const to = Math.ceil(toTs(v2));
+  if (to - from < 2) return null;
+  return { from, to };
+}
+
+function clearReadout(el) {
+  el.classList.add('idle');
+  el.innerHTML = '<p class="muted">Hover the chart for the score at any moment. Drag across it to zoom in; double-click to zoom back out.</p>';
 }
 
 function render(data) {
+  const fresh = data !== lastData; // new data from the server, not just a restyle
   lastData = data;
-  const threshold = window.TeamColors.threshold(); // this viewer's "big swing" size, in points
-  const mine = window.TeamColors.mine();
-  // A color this viewer picked, else the look's default.
-  const colorById = new Map((data.teams || []).map((t) => [t.roster_id, mine[t.roster_id]]));
   for (const t of data.teams || []) avatarById.set(t.roster_id, t.avatar);
   const ids = new Set(data.matchups.map((m) => m.matchup_id));
   for (const [id, c] of charts) {
@@ -454,80 +554,258 @@ function render(data) {
   }
   for (const m of data.matchups) {
     if (!charts.has(m.matchup_id)) charts.set(m.matchup_id, makeCard(m));
-    const { chart, els } = charts.get(m.matchup_id);
-    const colors = matchupColors({ color: colorById.get(m.a.roster_id) }, { color: colorById.get(m.b.roster_id) });
-    const week = data.mode === 'week';
-    const { xs, gaps } = week ? { xs: m.series.map((s) => s[0] - data.first), gaps: [] } : compress(m.series);
-    const bands = week ? (data.liveRanges || []).map(([a, b]) => [a - data.first, b - data.first]) : [];
-
-    // Swing markers sit on the line at the moment of the swing.
-    const events = m.events
-      .filter((e) => e.delta * 100 >= threshold && m.series.length)
-      .map((e) => {
-        const i = nearestIndex(m.series, e.ts, (s) => s[0]);
-        const helpsA = e.roster_id === m.a.roster_id;
-        return {
-          ...e,
-          i,
-          x: xs[i],
-          y: m.series[i][1] * 100,
-          team: helpsA ? m.a.name : m.b.name,
-          color: helpsA ? colors.a : colors.b,
-        };
-      });
-
-    const prevHighlight = chart.$state && chart.$state.highlight;
-    const ink = L().inkMix;
-    chart.$state = {
-      id: m.matchup_id, mode: data.mode, first: data.first, series: m.series, xs, gaps, bands,
-      a: m.a.name, b: m.b.name, colors, lineColors: { a: inked(colors.a, ink), b: inked(colors.b, ink) },
-      events, highlight: prevHighlight,
-    };
-    styleChart(chart);
-    chart.data.datasets[0].data = m.series.map((s, i) => ({ x: xs[i], y: s[1] * 100 }));
-    chart.data.datasets[1].data = events.map((e) => ({ x: e.x, y: e.y, ev: e }));
-    chart.data.datasets[2].data = smoothLine(m.series, xs);
-    chart.options.scales.x.min = week ? 0 : xs[0] ?? 0;
-    chart.options.scales.x.max = week ? Math.max(1, data.lastTs - data.first) : xs[xs.length - 1] ?? 1;
-    chart.update('none');
-
-    const last = m.series[m.series.length - 1];
-    els.aName.textContent = m.a.name;
-    els.bName.textContent = m.b.name;
-    els.aName.title = m.a.owner || '';
-    els.bName.title = m.b.owner || '';
-    els.aRow.style.setProperty('--tc', colors.a);
-    els.bRow.style.setProperty('--tc', colors.b);
-    if (last) {
-      const [, p, ap, bp, aproj, bproj] = last;
-      // The % sign (or "pct.") comes from the look's CSS.
-      const over = isOver(ap, bp, aproj, bproj);
-      els.aPct.textContent = winNum(p, over);
-      els.bPct.textContent = winNum(1 - p, over);
-      els.aRow.classList.toggle('leader', p >= 0.5);
-      els.bRow.classList.toggle('leader', p < 0.5);
-      els.aPts.textContent = ap.toFixed(2);
-      els.bPts.textContent = bp.toFixed(2);
-      els.aProj.textContent = `proj ${aproj.toFixed(1)}`;
-      els.bProj.textContent = `proj ${bproj.toFixed(1)}`;
-      els.canvas.setAttribute('aria-label', `${m.a.name} ${pct(p, over)} vs ${m.b.name} ${pct(1 - p, over)} win probability over time`);
-    }
-
-    // Swing list, newest first.
-    els.count.textContent = events.length ? `(${events.length})` : '';
-    els.swings.hidden = !events.length;
-    els.list.innerHTML = [...events].reverse().map((e) => `
-      <li data-id="${e.id}" style="--tc:${e.color}">${bubbleHtml(e, 26)}
-      <span class="sw-time">${fmtTime(e.ts)}</span>
-      <span class="sw-text">${esc(e.text)}</span>
-      <b class="sw-pct">+${Math.round(e.delta * 100)}%</b>
-      <span class="sw-team">${esc(e.team)}</span></li>`).join('');
-    for (const li of els.list.children) {
-      const setHl = (id) => { chart.$state.highlight = id; chart.update('none'); };
-      li.onmouseenter = () => setHl(Number(li.dataset.id));
-      li.onmouseleave = () => setHl(null);
-    }
+    drawMatchup(charts.get(m.matchup_id), m, data);
   }
+  refreshDetail(fresh);
+}
+
+/**
+ * Draw one matchup into a card. `zoom` ({ from, to, series, events }) swaps in
+ * full-detail data for a stretch of time and fits the % axis to it.
+ */
+function drawMatchup({ chart, els }, m, data, zoom = null) {
+  const threshold = window.TeamColors.threshold(); // this viewer's "big swing" size, in points
+  const mine = window.TeamColors.mine(); // colors this viewer picked, else the look's defaults
+  const colors = matchupColors({ color: mine[m.a.roster_id] }, { color: mine[m.b.roster_id] });
+  const series = zoom ? zoom.series : m.series;
+  const allEvents = zoom ? zoom.events : m.events;
+  const week = data.mode === 'week';
+  const { xs, gaps } = week ? { xs: series.map((s) => s[0] - data.first), gaps: [] } : compress(series);
+  const bands = week ? (data.liveRanges || []).map(([a, b]) => [a - data.first, b - data.first]) : [];
+
+  // Swing markers sit on the line at the moment of the swing.
+  const events = allEvents
+    .filter((e) => e.delta * 100 >= threshold && series.length)
+    .map((e) => {
+      const i = nearestIndex(series, e.ts, (s) => s[0]);
+      const helpsA = e.roster_id === m.a.roster_id;
+      return {
+        ...e,
+        i,
+        x: xs[i],
+        y: series[i][1] * 100,
+        team: helpsA ? m.a.name : m.b.name,
+        color: helpsA ? colors.a : colors.b,
+      };
+    });
+
+  const prevHighlight = chart.$state && chart.$state.highlight;
+  const ink = L().inkMix;
+  chart.$state = {
+    id: m.matchup_id, mode: data.mode, first: data.first, series, xs, gaps, bands,
+    a: m.a.name, b: m.b.name, colors, lineColors: { a: inked(colors.a, ink), b: inked(colors.b, ink) },
+    events, highlight: prevHighlight,
+  };
+  styleChart(chart);
+  chart.data.datasets[0].data = series.map((s, i) => ({ x: xs[i], y: s[1] * 100 }));
+  chart.data.datasets[1].data = events.map((e) => ({ x: e.x, y: e.y, ev: e }));
+  chart.data.datasets[2].data = smoothLine(series, xs);
+  const sx = chart.options.scales.x;
+  const sy = chart.options.scales.y;
+  if (zoom) {
+    // Zoomed: just the selected stretch, with the % axis fitted to it.
+    sx.min = xs[0] ?? 0;
+    sx.max = xs[xs.length - 1] ?? 1;
+    Object.assign(sy, fitPercent(series));
+    sy.ticks.stepSize = undefined; // let Chart.js pick tidy steps for the fitted range
+  } else {
+    sx.min = week ? 0 : xs[0] ?? 0;
+    sx.max = week ? Math.max(1, data.lastTs - data.first) : xs[xs.length - 1] ?? 1;
+    Object.assign(sy, { min: 0, max: 100 });
+    sy.ticks.stepSize = 25;
+  }
+  chart.update('none');
+
+  const last = m.series[m.series.length - 1];
+  els.aName.textContent = m.a.name;
+  els.bName.textContent = m.b.name;
+  els.aName.title = m.a.owner || '';
+  els.bName.title = m.b.owner || '';
+  els.aRow.style.setProperty('--tc', colors.a);
+  els.bRow.style.setProperty('--tc', colors.b);
+  if (last) {
+    const [, p, ap, bp, aproj, bproj] = last;
+    // The % sign (or "pct.") comes from the look's CSS.
+    const over = isOver(ap, bp, aproj, bproj);
+    els.aPct.textContent = winNum(p, over);
+    els.bPct.textContent = winNum(1 - p, over);
+    els.aRow.classList.toggle('leader', p >= 0.5);
+    els.bRow.classList.toggle('leader', p < 0.5);
+    els.aPts.textContent = ap.toFixed(2);
+    els.bPts.textContent = bp.toFixed(2);
+    els.aProj.textContent = `proj ${aproj.toFixed(1)}`;
+    els.bProj.textContent = `proj ${bproj.toFixed(1)}`;
+    els.canvas.setAttribute('aria-label', `${m.a.name} ${pct(p, over)} vs ${m.b.name} ${pct(1 - p, over)} win probability over time`);
+  }
+
+  // Swing list, newest first.
+  els.count.textContent = events.length ? `(${events.length})` : '';
+  els.swings.hidden = !events.length;
+  els.list.innerHTML = [...events].reverse().map((e) => `
+    <li data-id="${e.id}" style="--tc:${e.color}">${bubbleHtml(e, 26)}
+    <span class="sw-time">${fmtTime(e.ts)}</span>
+    <span class="sw-text">${esc(e.text)}</span>
+    <b class="sw-pct">+${Math.round(e.delta * 100)}%</b>
+    <span class="sw-team">${esc(e.team)}</span></li>`).join('');
+  for (const li of els.list.children) {
+    const setHl = (id) => { chart.$state.highlight = id; chart.update('none'); };
+    li.onmouseenter = () => setHl(Number(li.dataset.id));
+    li.onmouseleave = () => setHl(null);
+  }
+}
+
+/** % axis range for a zoomed stretch: the data's span plus a margin, in steps of 5, at least 10 wide. */
+function fitPercent(series) {
+  if (!series.length) return { min: 0, max: 100 };
+  let lo = 100;
+  let hi = 0;
+  for (const s of series) {
+    lo = Math.min(lo, s[1] * 100);
+    hi = Math.max(hi, s[1] * 100);
+  }
+  let min = Math.floor((lo - 5) / 5) * 5;
+  let max = Math.ceil((hi + 5) / 5) * 5;
+  if (max - min < 10) {
+    const mid = (min + max) / 2;
+    min = Math.floor((mid - 5) / 5) * 5;
+    max = min + 10;
+  }
+  if (min < 0) { max -= min; min = 0; }
+  if (max > 100) { min -= max - 100; max = 100; }
+  return { min: Math.max(0, min), max: Math.min(100, max) };
+}
+
+// ---- Large view: one matchup over most of the screen, with drag-to-zoom ----
+const detail = {
+  mid: null, // matchup shown, or null when closed
+  entry: null, // its card and chart
+  stack: [], // zoom ranges, innermost last
+  zoomData: null, // full-detail data for the innermost range
+  pushed: false, // whether opening it added a history entry
+  req: 0, // ignores late answers to superseded range requests
+};
+
+function openDetail(mid, range = null, { push = true } = {}) {
+  if (!lastData) return;
+  const m = lastData.matchups.find((x) => x.matchup_id === mid);
+  if (!m) return;
+  if (detail.mid !== mid) {
+    closeDetail({ silent: true });
+    detail.mid = mid;
+    detail.entry = makeCard(m, $('detail-slot'), true);
+    clearReadout(detail.entry.card.querySelector('.detail-readout'));
+  }
+  $('detail').hidden = false;
+  document.body.classList.add('detail-open');
+  panel.hidden = true;
+  if (push && !detail.pushed) {
+    history.pushState({ detail: mid }, '', `#m=${mid}`);
+    detail.pushed = true;
+  }
+  detail.stack = [];
+  detail.zoomData = null;
+  drawDetail();
+  $('detail-close').focus({ preventScroll: true });
+  if (range) zoomTo(range);
+}
+
+/** Close the large view. From the × / Esc / backdrop this steps history back, which lands here again. */
+function closeDetail({ silent = false, fromHistory = false } = {}) {
+  if (detail.mid === null) return;
+  if (!silent && !fromHistory && detail.pushed) {
+    history.back(); // the popstate handler finishes closing
+    return;
+  }
+  if (!fromHistory && !detail.pushed && location.hash.startsWith('#m=')) {
+    history.replaceState(null, '', location.pathname + location.search);
+  }
+  detail.entry.chart.destroy();
+  detail.entry.card.remove();
+  Object.assign(detail, { mid: null, entry: null, stack: [], zoomData: null, pushed: false });
+  $('detail').hidden = true;
+  document.body.classList.remove('detail-open');
+}
+
+function zoomTo(range) {
+  detail.stack.push(range);
+  fetchZoom();
+}
+function zoomOut() {
+  detail.stack.pop();
+  if (detail.stack.length) fetchZoom();
+  else { detail.zoomData = null; drawDetail(); }
+}
+function resetZoom() {
+  if (!detail.stack.length) return;
+  detail.stack = [];
+  detail.zoomData = null;
+  drawDetail();
+}
+
+async function fetchZoom() {
+  const range = detail.stack[detail.stack.length - 1];
+  if (!range || !current || detail.mid === null) return;
+  const req = ++detail.req;
+  const p = new URLSearchParams({ season: current.season, week: current.week, matchup: detail.mid, from: range.from, to: range.to, mode: lastData.mode });
+  try {
+    const data = await (await fetch(`api/range?${p}`)).json();
+    if (req !== detail.req || detail.mid === null) return;
+    if (!data.series || data.series.length < 2) {
+      // Nothing recorded in that stretch: stay where we were.
+      detail.stack.pop();
+      if (!detail.stack.length) detail.zoomData = null;
+      drawDetail();
+      $('detail-range').textContent = 'Nothing recorded in that stretch';
+      return;
+    }
+    detail.zoomData = { ...range, series: data.series, events: data.events };
+    drawDetail();
+  } catch { /* keep the current view; the next refresh tries again */ }
+}
+
+function drawDetail() {
+  if (detail.mid === null || !lastData) return;
+  const m = lastData.matchups.find((x) => x.matchup_id === detail.mid);
+  if (!m) { closeDetail(); return; }
+  const zoom = detail.stack.length ? detail.zoomData : null;
+  drawMatchup(detail.entry, m, lastData, zoom);
+  const zoomed = !!zoom;
+  $('detail-out').hidden = !zoomed;
+  $('detail-reset').hidden = detail.stack.length < 2;
+  $('detail-range').textContent = zoomed ? rangeLabel(zoom.series[0][0], zoom.series[zoom.series.length - 1][0]) : (lastData.mode === 'week' ? 'Whole week' : 'Gametime');
+}
+
+/** Keep the large view in step with the grid. New data re-fetches a zoomed stretch; a restyle just redraws. */
+function refreshDetail(fresh) {
+  if (detail.mid === null) return;
+  if (fresh && detail.stack.length) fetchZoom();
+  else drawDetail();
+}
+
+function rangeLabel(a, b) {
+  const sameDay = fmtDay(a) === fmtDay(b);
+  return sameDay ? `${fmtDay(a)} ${fmtTime(a)}–${fmtTime(b)}` : `${fmtDay(a)} ${fmtTime(a)} – ${fmtDay(b)} ${fmtTime(b)}`;
+}
+
+function setupDetail() {
+  $('detail-close').onclick = () => closeDetail();
+  $('detail-backdrop').onclick = () => closeDetail();
+  $('detail-out').onclick = () => zoomOut();
+  $('detail-reset').onclick = () => resetZoom();
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && detail.mid !== null) closeDetail();
+  });
+  window.addEventListener('popstate', () => {
+    const mid = hashMatchup();
+    if (mid === null) closeDetail({ fromHistory: true });
+    else if (mid !== detail.mid) openDetail(mid, null, { push: false });
+  });
+}
+
+/** The matchup in a "#m=3" link, or null. */
+function hashMatchup() {
+  const mt = /^#m=(\d+)$/.exec(location.hash);
+  return mt ? Number(mt[1]) : null;
 }
 
 function buildViewToggle() {
@@ -542,6 +820,7 @@ function buildViewToggle() {
       view = v;
       saveView(v);
       markPressed();
+      closeDetail();
       load();
     };
     box.appendChild(b);
@@ -582,12 +861,15 @@ async function init() {
   sel.innerHTML = weeks.map((w, i) => `<option value="${i}">Week ${w.week}${w.season !== weeks[0].season ? ` (${w.season})` : ''}</option>`).join('');
   if (!weeks.length) { $('empty').hidden = false; $('status').textContent = ''; return; }
   current = weeks[0];
-  sel.onchange = () => { current = weeks[Number(sel.value)]; load(); };
+  sel.onchange = () => { current = weeks[Number(sel.value)]; closeDetail(); load(); };
   buildViewToggle();
+  setupDetail();
   window.Looks.onChange(() => { if (lastData) render(lastData); });
   // Charts draw on a canvas, which won't pick up a web font that arrives late; redraw then.
   if (document.fonts) document.fonts.addEventListener('loadingdone', () => { if (lastData) render(lastData); });
   await load();
+  // A shared "#m=3" link opens that matchup's large view straight away.
+  if (hashMatchup() !== null) openDetail(hashMatchup(), null, { push: false });
 
   window.addEventListener('scroll', () => { panel.hidden = true; }, { passive: true });
   // Teletext's page header clock ("Fri 20 Nov 21:14/05"); hidden in the other looks.

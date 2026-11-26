@@ -105,22 +105,85 @@ function weekData(season, week, mode = 'game') {
   for (const e of eventsQ.all(season, week, from, to)) {
     const m = byId.get(e.matchup_id);
     if (!m || (mode !== 'week' && !duringGames(e.ts))) continue;
-    const players = JSON.parse(e.players_json || '[]');
-    for (const p of players) {
-      // A DEF going up from 0 is its game kicking off, not a score.
-      if (p.pos === 'DEF' && !p.play && p.delta_pts > 0) {
-        const before = defBeforeQ.get(season, Number(week), p.roster_id, p.player_id, e.ts - MERGE_LOOKBACK);
-        p.defStart = !before || !before.points;
-      }
-    }
-    // Who the bubble shows: the biggest contributor in favor of the team the swing
-    // helped (their own scorer, or an opponent's negative play), else the biggest mover.
-    const helps = (p) => (p.roster_id === e.roster_id ? p.delta_pts : -p.delta_pts);
-    const star = [...players].sort((x, y) => helps(y) - helps(x))[0];
-    const who = star ? { player_id: star.player_id, pos: star.pos, roster_id: star.roster_id, name: star.name } : null;
-    m.events.push({ id: e.id, ts: e.ts, roster_id: e.roster_id, delta: +e.delta.toFixed(4), win_prob: +(e.win_prob ?? 0).toFixed(4), text: describe({ ...e, players }), who });
+    m.events.push(shapeEvent(e, season, week));
   }
   return { season, week, mode, fallback, res, first: span.first, lastTs: span.last, liveRanges: ranges, matchups, ...teamsData() };
+}
+
+/** A stored swing as the page shows it: who caused it and a readable line. */
+function shapeEvent(e, season, week) {
+  const players = JSON.parse(e.players_json || '[]');
+  for (const p of players) {
+    // A DEF going up from 0 is its game kicking off, not a score.
+    if (p.pos === 'DEF' && !p.play && p.delta_pts > 0) {
+      const before = defBeforeQ.get(season, Number(week), p.roster_id, p.player_id, e.ts - MERGE_LOOKBACK);
+      p.defStart = !before || !before.points;
+    }
+  }
+  // Who the bubble shows: the biggest contributor in favor of the team the swing
+  // helped (their own scorer, or an opponent's negative play), else the biggest mover.
+  const helps = (p) => (p.roster_id === e.roster_id ? p.delta_pts : -p.delta_pts);
+  const star = [...players].sort((x, y) => helps(y) - helps(x))[0];
+  const who = star ? { player_id: star.player_id, pos: star.pos, roster_id: star.roster_id, name: star.name } : null;
+  return { id: e.id, ts: e.ts, roster_id: e.roster_id, delta: +e.delta.toFixed(4), win_prob: +(e.win_prob ?? 0).toFixed(4), text: describe({ ...e, players }), who };
+}
+
+/** Pair up the two teams' rows into [ts, winProbA, ptsA, ptsB, projA, projB] per time bucket. */
+function pairSeries(rows, res, ra, rb) {
+  const byTs = new Map();
+  for (const r of rows) {
+    const key = Math.floor(r.ts / res);
+    if (!byTs.has(key)) byTs.set(key, {});
+    byTs.get(key)[r.roster_id] = r;
+  }
+  const series = [];
+  for (const pt of byTs.values()) {
+    const a = pt[ra];
+    const b = pt[rb];
+    if (!a || !b) continue;
+    series.push([a.ts, +a.win_prob.toFixed(4), a.points, b.points, +a.proj_final.toFixed(2), +b.proj_final.toFixed(2)]);
+  }
+  return series;
+}
+
+// One matchup between two times, at full detail (thinned only past TARGET_POINTS).
+// Used when someone zooms into a chart. Rides the primary key, so it's quick.
+const rangeCountQ = db.prepare(`SELECT COUNT(*) AS n FROM snapshots
+  WHERE season = ? AND week = ? AND matchup_id = ? AND ts BETWEEN ? AND ? AND (? = 0 OR live = 1)`);
+const rangeRowsQ = db.prepare(`SELECT roster_id, MAX(ts) AS ts, points, proj_final, win_prob FROM snapshots
+  WHERE season = ? AND week = ? AND matchup_id = ? AND ts BETWEEN ? AND ? AND (? = 0 OR live = 1)
+  GROUP BY roster_id, ts / CAST(? AS INTEGER) ORDER BY ts`);
+const rangeRostersQ = db.prepare(`SELECT DISTINCT roster_id FROM snapshots
+  WHERE season = ? AND week = ? AND matchup_id = ? ORDER BY roster_id`);
+const rangeBeforeQ = db.prepare(`SELECT roster_id, ts, points, proj_final, win_prob FROM snapshots
+  WHERE season = ? AND week = ? AND matchup_id = ? AND roster_id = ? AND ts < ? ORDER BY ts DESC LIMIT 1`);
+const rangeEventsQ = db.prepare(`SELECT id, ts, matchup_id, roster_id, delta, win_prob, players_json, label FROM events
+  WHERE season = ? AND week = ? AND matchup_id = ? AND ts BETWEEN ? AND ? ORDER BY ts`);
+
+function rangeData(season, week, matchup, from, to, mode) {
+  const liveOnly = mode === 'game' ? 1 : 0;
+  const { n } = rangeCountQ.get(season, week, matchup, from, to, liveOnly);
+  const res = Math.max(1, Math.ceil(n / 2 / TARGET_POINTS));
+  let rows = rangeRowsQ.all(season, week, matchup, from, to, liveOnly, res);
+  const [ra, rb] = rangeRostersQ.all(season, week, matchup).map((r) => r.roster_id);
+  if (ra === undefined || rb === undefined) return { season, week, matchup, mode, from, to, res, series: [], events: [] };
+  if (!liveOnly) {
+    // Whole week: quiet stretches store nothing (only changes), so carry the
+    // last known value in at the start of the range and out to its end; a quiet
+    // day then shows as the flat line it was.
+    const end = Math.min(to, weekLatestQ.get(season, week).t);
+    const before = [ra, rb].map((rid) => rangeBeforeQ.get(season, week, matchup, rid, from));
+    if (before.every(Boolean)) rows = [...before.map((r) => ({ ...r, ts: from })), ...rows];
+    const lastA = [...rows].reverse().find((r) => r.roster_id === ra);
+    const lastB = [...rows].reverse().find((r) => r.roster_id === rb);
+    if (lastA && lastB && Math.max(lastA.ts, lastB.ts) < end) rows = [...rows, { ...lastA, ts: end }, { ...lastB, ts: end }];
+  }
+  const series = pairSeries(rows, res, ra, rb);
+  const ranges = liveOnly ? liveRanges(season, week) : null;
+  const events = rangeEventsQ.all(season, week, matchup, from, to)
+    .filter((e) => !ranges || ranges.some(([a, b]) => e.ts >= a - 60 && e.ts <= b + 60))
+    .map((e) => shapeEvent(e, season, week));
+  return { season, week, matchup, mode, from, to, res, series, events };
 }
 
 // Team names and avatars, plus who plays whom this week. Colors and the swing
@@ -157,7 +220,7 @@ function send(res, code, body, type = 'application/json') {
 // hundred ms, so it's built at most once per FRESH_MS no matter how many
 // people are watching, and not at all for weeks that have stopped changing.
 const FRESH_MS = 4000;
-const CACHE_MAX = 12;
+const CACHE_MAX = 40; // a dozen week views plus recent zooms
 const cache = new Map(); // key -> { stamp, at, raw, gz }
 const latestTsQ = db.prepare('SELECT MAX(ts) AS t FROM snapshots');
 const weekLatestQ = db.prepare('SELECT MAX(ts) AS t FROM snapshots WHERE season = ? AND week = ?');
@@ -208,6 +271,20 @@ function handler(req, res) {
       if (!season || !Number.isInteger(week)) return send(res, 400, { error: 'season and week required' });
       const stamp = weekLatestQ.get(season, week).t;
       return sendCached(req, res, cached(`week:${season}:${week}:${mode}`, stamp, () => weekData(season, week, mode)));
+    }
+    if (url.pathname === '/api/range') {
+      const season = url.searchParams.get('season');
+      const week = Number(url.searchParams.get('week'));
+      const matchup = Number(url.searchParams.get('matchup'));
+      const from = Math.floor(Number(url.searchParams.get('from')));
+      const to = Math.ceil(Number(url.searchParams.get('to')));
+      const mode = url.searchParams.get('mode') === 'week' ? 'week' : 'game';
+      if (!season || ![week, matchup, from, to].every(Number.isFinite) || to <= from) {
+        return send(res, 400, { error: 'season, week, matchup, from and to required' });
+      }
+      const stamp = weekLatestQ.get(season, week).t;
+      return sendCached(req, res, cached(`range:${season}:${week}:${matchup}:${from}:${to}:${mode}`, stamp,
+        () => rangeData(season, week, matchup, from, to, mode)));
     }
     const file = path.normalize(path.join(PUBLIC, url.pathname === '/' ? 'index.html' : url.pathname));
     if (!file.startsWith(PUBLIC) || !fs.existsSync(file) || !fs.statSync(file).isFile()) return send(res, 404, 'Not found', 'text/plain');

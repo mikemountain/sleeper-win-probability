@@ -73,7 +73,7 @@
 [data-look="broadcast"] .sw-pct { background: var(--tc); color: #fff; font-weight: 800; padding: 0 6px; }
 [data-look="broadcast"] .sw-time { color: var(--muted); }
 [data-look="broadcast"] .sw-team::before { content: '\25B8  '; color: var(--muted); }
-[data-look="broadcast"] .hover-panel { background: var(--slab); border-left: 5px solid var(--ink); padding: 10px 12px; text-transform: uppercase; }
+[data-look="broadcast"] .hover-panel, [data-look="broadcast"] .detail-panel { background: var(--slab); border-left: 5px solid var(--ink); padding: 10px 12px; text-transform: uppercase; }
 [data-look="broadcast"] .hp-name { font-weight: 800; font-size: 17px; }
 [data-look="broadcast"] .hp-time, [data-look="broadcast"] .hp-sub { color: var(--muted); font-size: 13px; }
 [data-look="broadcast"] .hp-event { border-top: 2px solid var(--axis); }
@@ -140,7 +140,7 @@
 [data-look="paper"] .sw-text::after { content: '; '; }
 [data-look="paper"] .sw-pct, [data-look="paper"] .sw-team { font-style: italic; }
 [data-look="paper"] .sw-pct::after { content: ' for'; }
-[data-look="paper"] .hover-panel { background: var(--surface); border: 1px solid var(--ink); border-top: 4px double var(--ink); padding: 10px 12px; }
+[data-look="paper"] .hover-panel, [data-look="paper"] .detail-panel { background: var(--surface); border: 1px solid var(--ink); border-top: 4px double var(--ink); padding: 10px 12px; }
 [data-look="paper"] .hp-time, [data-look="paper"] .hp-sub { font-family: var(--font-num); font-size: 12px; color: var(--muted); }
 [data-look="paper"] .hp-name { font-weight: 700; }
 [data-look="paper"] .hp-row b { font-family: var(--font-num); }
@@ -207,7 +207,7 @@
 [data-look="scoreboard"] .sw-time { color: var(--muted); }
 [data-look="scoreboard"] .sw-text { color: var(--ink-2); }
 [data-look="scoreboard"] .sw-pct { color: var(--tc); }
-[data-look="scoreboard"] .hover-panel { background: var(--surface); border: 4px solid var(--bezel); padding: 10px 12px; text-transform: uppercase; }
+[data-look="scoreboard"] .hover-panel, [data-look="scoreboard"] .detail-panel { background: var(--surface); border: 4px solid var(--bezel); padding: 10px 12px; text-transform: uppercase; }
 [data-look="scoreboard"] .hp-time, [data-look="scoreboard"] .hp-sub { color: var(--muted); font-size: 12px; }
 [data-look="scoreboard"] .hp-row b { font-family: var(--font-num); font-size: 20px; color: var(--ink-2); }
 [data-look="scoreboard"] .hp-event { border-top: 2px solid var(--bezel); }
@@ -306,7 +306,7 @@
 [data-look="card"] .sw-pct { font-family: var(--font-display); color: var(--gold); }
 [data-look="card"] .sw-time { color: #c9b48f; }
 [data-look="card"] .sw-team { font-weight: 800; }
-[data-look="card"] .hover-panel {
+[data-look="card"] .hover-panel, [data-look="card"] .detail-panel {
   background: var(--stock); border: 3px solid var(--red); border-radius: 12px; padding: 10px 12px;
   box-shadow: 4px 4px 0 rgba(43, 29, 18, 0.35);
 }
@@ -384,7 +384,7 @@
 [data-look="riso"] .sw-pct { background: var(--tc); color: var(--page); border-radius: 999px; padding: 0 7px; font-family: var(--font-display); }
 [data-look="riso"] .sw-time { color: var(--muted); }
 [data-look="riso"] .sw-team { font-family: var(--font-display); text-transform: uppercase; color: var(--ink); }
-[data-look="riso"] .hover-panel { background: var(--page); border: 3px solid var(--pink); padding: 10px 12px; font-size: 12px; }
+[data-look="riso"] .hover-panel, [data-look="riso"] .detail-panel { background: var(--page); border: 3px solid var(--pink); padding: 10px 12px; font-size: 12px; }
 [data-look="riso"] .hp-name { font-family: var(--font-display); text-transform: uppercase; }
 [data-look="riso"] .hp-row b { font-family: var(--font-display); color: var(--pink); }
 [data-look="riso"] .hp-time, [data-look="riso"] .hp-sub { color: var(--muted); }
@@ -467,7 +467,7 @@
 [data-look="teletext"] .sw-text { color: var(--ink); }
 [data-look="teletext"] .sw-pct { color: var(--tt-green); }
 [data-look="teletext"] .sw-team { color: var(--tt-yellow); }
-[data-look="teletext"] .hover-panel { background: var(--page); border: 4px solid var(--tt-blue); padding: 8px 10px; text-transform: uppercase; font-size: 20px; }
+[data-look="teletext"] .hover-panel, [data-look="teletext"] .detail-panel { background: var(--page); border: 4px solid var(--tt-blue); padding: 8px 10px; text-transform: uppercase; font-size: 20px; }
 [data-look="teletext"] .hp-time { color: var(--tt-cyan); }
 [data-look="teletext"] .hp-sub { color: var(--tt-cyan); font-size: 17px; }
 [data-look="teletext"] .hp-row b { color: var(--tt-yellow); }
@@ -496,3 +496,6 @@
   [data-look="broadcast"] .trow { height: auto; min-height: 32px; }
   [data-look="broadcast"] .trow .name { padding: 4px 8px; }
 }
+
+/* Large view: the trading card banner counts grid cards, so leave it off the big one */
+[data-look="card"] .card.big::before { content: none; }
